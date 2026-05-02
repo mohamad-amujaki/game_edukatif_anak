@@ -24,10 +24,18 @@ export async function unwrapData<T>(
   res: Response | Promise<Response>,
 ): Promise<T> {
   const r = await Promise.resolve(res);
-  const json = (await r.json()) as {
-    data?: T;
-    error?: { message?: string };
-  };
+  const raw = await r.text();
+  let json: { data?: T; error?: { message?: string } };
+  try {
+    json = raw ? (JSON.parse(raw) as typeof json) : {};
+  } catch {
+    const hint =
+      raw.trimStart().startsWith('<!DOCTYPE') ||
+      raw.trimStart().startsWith('<html')
+        ? 'API mengembalikan halaman HTML (bukan JSON). Periksa proxy Netlify / URL backend.'
+        : 'Respons bukan JSON.';
+    throw new Error(hint);
+  }
   if (!r.ok || json.error) {
     throw new Error(json.error?.message ?? r.statusText);
   }

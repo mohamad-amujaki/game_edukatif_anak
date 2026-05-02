@@ -14,6 +14,16 @@ export default defineConfig({
     VitePWA({
       registerType: 'autoUpdate',
       includeAssets: ['icons/pwa.svg', 'img/stickers/*.svg'],
+      workbox: {
+        /** Jangan fallback SPA ke `/api/*`; hindari SW meng-cache respons API. */
+        navigateFallbackDenylist: [/^\/api/, /^\/admin/],
+        runtimeCaching: [
+          {
+            urlPattern: ({ url }) => url.pathname.startsWith('/api'),
+            handler: 'NetworkOnly',
+          },
+        ],
+      },
       manifest: {
         name: 'Bimo Belajar',
         short_name: 'Bimo',

@@ -119,7 +119,13 @@ function HomePage() {
     api
       .getProfiles()
       .then(setProfiles)
-      .catch(() => setErr('Gagal memuat profil'))
+      .catch((e: unknown) =>
+        setErr(
+          e instanceof Error
+            ? e.message || 'Gagal memuat profil'
+            : 'Gagal memuat profil',
+        ),
+      )
       .finally(() => setLoading(false));
   }, []);
 
