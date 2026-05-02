@@ -1,0 +1,220 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model ParentSettings {
+  id                   String   @id @default("singleton")
+  pinHash              String?
+  pinSetupQuestion     String?
+  pinSetupAnswerHash   String?
+  dailyTimeCapMinutes  Int      @default(30)
+  breakReminderMinutes Int      @default(15)
+  musicEnabled         Boolean  @default(true)
+  sfxEnabled           Boolean  @default(true)
+  reduceMotion         Boolean  @default(false)
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+}
+
+model ChildProfile {
+  id        String   @id @default(cuid())
+  name      String
+  avatarKey String
+  ageMode   AgeMode
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  progress       Progress[]
+  xpLogs         XpLog[]
+  earnedStickers EarnedSticker[]
+  earnedBadges   EarnedBadge[]
+  levelMastery   LevelMastery[]
+  dailyStreak    DailyStreak?
+  playSessions   PlaySession[]
+
+  @@index([createdAt])
+}
+
+enum AgeMode {
+  TK
+  SD1
+}
+
+model LevelDefinition {
+  id          String   @id
+  track       Track
+  ageMode     AgeMode
+  order       Int
+  title       String
+  description String
+  iconKey     String
+
+  activities    ActivityDefinition[]
+  levelMastery  LevelMastery[]
+
+  @@unique([track, ageMode, order])
+  @@index([track, ageMode])
+}
+
+enum Track {
+  literasi
+  math
+}
+
+model ActivityDefinition {
+  id            String       @id
+  levelId       String
+  level         LevelDefinition @relation(fields: [levelId], references: [id], onDelete: Cascade)
+  type          ActivityType
+  order         Int
+  title         String
+  payload       String
+  voiceOverKeys String
+  estimatedSec  Int          @default(180)
+
+  progress Progress[]
+
+  @@unique([levelId, order])
+  @@index([levelId])
+}
+
+enum ActivityType {
+  HURUF_GAMBAR_MATCHING
+  SUSUN_SUKU_KATA
+  BACA_KALIMAT_PENDEK
+  HITUNG_BENDA
+  BANDINGKAN_LEBIH_KURANG
+  PENJUMLAHAN_VISUAL
+  PENGURANGAN_VISUAL
+}
+
+model Progress {
+  id               String   @id @default(cuid())
+  childId          String
+  child            ChildProfile @relation(fields: [childId], references: [id], onDelete: Cascade)
+  activityId       String
+  activity         ActivityDefinition @relation(fields: [activityId], references: [id], onDelete: Cascade)
+  bestScore        Int      @default(0)
+  bestStars        Int      @default(0)
+  totalAttempts    Int      @default(0)
+  firstCompletedAt DateTime?
+  lastPlayedAt     DateTime @default(now())
+
+  @@unique([childId, activityId])
+  @@index([childId])
+  @@index([activityId])
+}
+
+model LevelMastery {
+  id          String   @id @default(cuid())
+  childId     String
+  child       ChildProfile @relation(fields: [childId], references: [id], onDelete: Cascade)
+  levelId     String
+  level       LevelDefinition @relation(fields: [levelId], references: [id], onDelete: Cascade)
+  isUnlocked  Boolean  @default(false)
+  isMastered  Boolean  @default(false)
+  unlockedAt  DateTime?
+  masteredAt  DateTime?
+
+  @@unique([childId, levelId])
+  @@index([childId])
+}
+
+model XpLog {
+  id        String   @id @default(cuid())
+  childId   String
+  child     ChildProfile @relation(fields: [childId], references: [id], onDelete: Cascade)
+  amount    Int
+  source    XpSource
+  refId     String?
+  createdAt DateTime @default(now())
+
+  @@index([childId, createdAt])
+}
+
+enum XpSource {
+  ACTIVITY_COMPLETE
+  STAR_BONUS
+  DAILY_STREAK
+  DAILY_QUEST
+  LEVEL_UP
+  REPLAY
+}
+
+model StickerCatalog {
+  id        String  @id
+  name      String
+  imagePath String
+  rarity    Rarity
+  theme     String
+
+  earnedBy EarnedSticker[]
+}
+
+enum Rarity {
+  COMMON
+  RARE
+  EPIC
+}
+
+model EarnedSticker {
+  id        String   @id @default(cuid())
+  childId   String
+  child     ChildProfile @relation(fields: [childId], references: [id], onDelete: Cascade)
+  stickerId String
+  sticker   StickerCatalog @relation(fields: [stickerId], references: [id])
+  earnedAt  DateTime @default(now())
+
+  @@unique([childId, stickerId])
+  @@index([childId])
+}
+
+model BadgeCatalog {
+  id          String  @id
+  code        String  @unique
+  name        String
+  description String
+  iconPath    String
+  criteriaKey String
+
+  earnedBy EarnedBadge[]
+}
+
+model EarnedBadge {
+  id       String   @id @default(cuid())
+  childId  String
+  child    ChildProfile @relation(fields: [childId], references: [id], onDelete: Cascade)
+  badgeId  String
+  badge    BadgeCatalog @relation(fields: [badgeId], references: [id])
+  earnedAt DateTime @default(now())
+
+  @@unique([childId, badgeId])
+  @@index([childId])
+}
+
+model DailyStreak {
+  id             String   @id @default(cuid())
+  childId        String   @unique
+  child          ChildProfile @relation(fields: [childId], references: [id], onDelete: Cascade)
+  currentStreak  Int      @default(0)
+  longestStreak  Int      @default(0)
+  lastPlayedDate String?
+  updatedAt      DateTime @updatedAt
+}
+
+model PlaySession {
+  id          String    @id @default(cuid())
+  childId     String
+  child       ChildProfile @relation(fields: [childId], references: [id], onDelete: Cascade)
+  startedAt   DateTime  @default(now())
+  endedAt     DateTime?
+  durationSec Int       @default(0)
+  dateKey     String
+
+  @@index([childId, dateKey])
+}
