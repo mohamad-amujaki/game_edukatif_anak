@@ -1,4 +1,12 @@
 import { PrismaClient } from '@prisma/client';
+import {
+  sd1Math1TambahQuestions,
+  sd1Math2TambahQuestions,
+  sd1Math3KurangQuestions,
+  tkMath1HitungQuestions,
+  tkMath2HitungQuestions,
+  tkMath3BandingQuestions,
+} from './math-banks';
 
 const prisma = new PrismaClient();
 
@@ -260,29 +268,7 @@ async function main() {
         title: 'Hitung Buah',
         payload: {
           instruction: 'Hitung jumlah benda lalu pilih angkanya!',
-          questions: [
-            {
-              bendaKey: 'apel',
-              bendaLabel: 'apel',
-              jumlah: 3,
-              pilihan: [2, 3, 4, 5],
-              jawaban: 3,
-            },
-            {
-              bendaKey: 'bunga',
-              bendaLabel: 'bunga',
-              jumlah: 5,
-              pilihan: [4, 5, 6, 7],
-              jawaban: 5,
-            },
-            {
-              bendaKey: 'kucing',
-              bendaLabel: 'kucing',
-              jumlah: 2,
-              pilihan: [1, 2, 3, 4],
-              jawaban: 2,
-            },
-          ],
+          questions: tkMath1HitungQuestions(),
         },
       },
     },
@@ -300,29 +286,7 @@ async function main() {
         title: 'Hitung Hewan',
         payload: {
           instruction: 'Hitung jumlahnya!',
-          questions: [
-            {
-              bendaKey: 'bebek',
-              bendaLabel: 'bebek',
-              jumlah: 6,
-              pilihan: [5, 6, 7, 8],
-              jawaban: 6,
-            },
-            {
-              bendaKey: 'ikan',
-              bendaLabel: 'ikan',
-              jumlah: 8,
-              pilihan: [7, 8, 9, 10],
-              jawaban: 8,
-            },
-            {
-              bendaKey: 'kupu',
-              bendaLabel: 'kupu-kupu',
-              jumlah: 4,
-              pilihan: [3, 4, 5, 6],
-              jawaban: 4,
-            },
-          ],
+          questions: tkMath2HitungQuestions(),
         },
       },
     },
@@ -340,20 +304,7 @@ async function main() {
         title: 'Lebih Banyak',
         payload: {
           instruction: 'Pilih kelompok yang lebih banyak!',
-          questions: [
-            {
-              mode: 'lebih_banyak',
-              kiri: { bendaKey: 'pisang', jumlah: 4 },
-              kanan: { bendaKey: 'pisang', jumlah: 7 },
-              jawaban: 'kanan',
-            },
-            {
-              mode: 'lebih_banyak',
-              kiri: { bendaKey: 'jeruk', jumlah: 9 },
-              kanan: { bendaKey: 'jeruk', jumlah: 6 },
-              jawaban: 'kiri',
-            },
-          ],
+          questions: tkMath3BandingQuestions(),
         },
       },
     },
@@ -458,10 +409,7 @@ async function main() {
         title: 'Tambah Yuk',
         payload: {
           instruction: 'Hitung jumlah totalnya!',
-          questions: [
-            { a: 3, b: 4, bendaKey: 'bintang', pilihan: [6, 7, 8, 9] },
-            { a: 2, b: 5, bendaKey: 'hati', pilihan: [6, 7, 8, 9] },
-          ],
+          questions: sd1Math1TambahQuestions(),
         },
       },
     },
@@ -479,10 +427,7 @@ async function main() {
         title: 'Tambah Lagi',
         payload: {
           instruction: 'Hitung jumlahnya!',
-          questions: [
-            { a: 8, b: 7, bendaKey: 'apel', pilihan: [14, 15, 16, 17] },
-            { a: 9, b: 6, bendaKey: 'bola', pilihan: [14, 15, 16, 17] },
-          ],
+          questions: sd1Math2TambahQuestions(),
         },
       },
     },
@@ -500,10 +445,7 @@ async function main() {
         title: 'Kurang Yuk',
         payload: {
           instruction: 'Hitung hasil pengurangan!',
-          questions: [
-            { a: 7, b: 2, bendaKey: 'apel', pilihan: [4, 5, 6, 7] },
-            { a: 10, b: 3, bendaKey: 'bola', pilihan: [6, 7, 8, 9] },
-          ],
+          questions: sd1Math3KurangQuestions(),
         },
       },
     },
