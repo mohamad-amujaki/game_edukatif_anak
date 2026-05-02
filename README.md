@@ -36,9 +36,10 @@ Buka **http://localhost:5173**.
 **Domain produksi:** [https://game-edukatif-anak.netlify.app/](https://game-edukatif-anak.netlify.app/)
 
 - Konfigurasi build ada di [`netlify.toml`](netlify.toml) (build → `dist`, fallback SPA).
+- **Proxy `/api/*` ke Fly** ada di [`netlify.toml`](netlify.toml) (harus **di atas** fallback `/* → index.html`). Tanpa itu, permintaan `/api` dapat mengembalikan HTML SPA → error *not valid JSON*. Sesuaikan host `to = ...fly.dev` jika nama app Fly berbeda.
 - Origin tersebut sudah termasuk di [`server/allowed-origins.ts`](server/allowed-origins.ts) untuk **CORS** dan **Better Auth** `trustedOrigins`. Tambahan domain/staging: set env **`CORS_ORIGINS`** di server API (pisahkan dengan koma).
-- Di **Netlify → Site settings → Environment variables → Build**: jika API Hono di-host **terpisah** (bukan proxy sama-origin), set **`VITE_API_URL`** ke URL publik API (mis. `https://api-anda.com`). Kalau nanti `/api` di-proxy ke backend lewat Netlify redirects, biarkan kosong; klien memakai `window.location.origin` ([`src/lib/auth-client.ts`](src/lib/auth-client.ts)).
-- Pada **server API** produksi: set **`BETTER_AUTH_URL`** ke URL publik tempat endpoint `/api/auth/*` diakses, dan **`BETTER_AUTH_SECRET`** (≥32 karakter).
+- **`VITE_API_URL`** (build Netlify): opsional. Kosongkan jika memakai proxy Netlify di atas; klien memakai [`apiBaseURL()`](src/lib/api-base-url.ts) (origin Netlify). Set ke URL API langsung (mis. `https://xxx.fly.dev`) jika **tidak** memakai proxy.
+- Pada **server API** (Fly): **`BETTER_AUTH_URL`** harus cocok dengan URL yang dipakai browser untuk auth — jika frontend memakai Netlify + proxy, biasanya **`https://game-edukatif-anak.netlify.app`** (bukan hanya URL Fly). Tetap set **`BETTER_AUTH_SECRET`** (≥32 karakter).
 
 ## Deploy API (Railway) — Hono + PostgreSQL
 

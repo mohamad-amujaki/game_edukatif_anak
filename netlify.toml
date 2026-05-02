@@ -5,6 +5,14 @@
 [build.environment]
   NODE_VERSION = "22"
 
+# Proxy API ke Fly — WAJIB di atas fallback SPA; kalau tidak, /api/* dapat index.html (bukan JSON).
+# Sesuaikan host jika nama app Fly Anda beda.
+[[redirects]]
+  from = "/api/*"
+  to = "https://game-edukatif-api.fly.dev/api/:splat"
+  status = 200
+  force = true
+
 # SPA (TanStack Router / React)
 [[redirects]]
   from = "/*"

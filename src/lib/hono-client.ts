@@ -5,10 +5,11 @@
  * Inferensi `hc<AppType>()` pada router gabungan sering jatuh ke `unknown` di TypeScript;
  * satu assertion di bawah menjaga ergonomi chain `.api…` tanpa menyalin URL string.
  */
+import { apiBaseURL } from '@/lib/api-base-url';
 import type { AppType } from '@server/app';
 import { hc } from 'hono/client';
 
-const hcRaw = hc<AppType>('', {
+const hcRaw = hc<AppType>(apiBaseURL(), {
   fetch: (input: RequestInfo | URL, init?: RequestInit) =>
     fetch(input, {
       ...init,
