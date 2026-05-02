@@ -92,7 +92,7 @@ Prasyarat: [Fly CLI](https://fly.io/docs/hands-on/install-flyctl/) terpasang dan
 
 5. **Frontend Netlify:** set **`VITE_API_URL`** ke `https://<nama-app>.fly.dev`.
 
-Image memakai [`Dockerfile`](Dockerfile) (API saja: `pnpm install --prod`, `prisma generate`, `pnpm start`). Health check Fly mengarah ke **`/api/health`** ([`fly.toml`](fly.toml)).
+Image memakai [`Dockerfile`](Dockerfile) (API: `pnpm install --prod`, `prisma generate`, lalu **`pnpm run start:server`**). **`prisma migrate deploy`** dijalankan lewat **[`release_command`](https://fly.io/docs/reference/configuration/#run-one-off-commands-before-releasing-a-deployment)** di [`fly.toml`](fly.toml) agar proses HTTP siap sebelum health check. Jika deploy masih time out, coba `fly deploy` sekali lagi (gangguan API Fly) atau `fly scale count 1` bila app membuat lebih dari satu mesin.
 
 ## Dokumentasi produk
 

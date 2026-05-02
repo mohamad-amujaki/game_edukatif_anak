@@ -19,5 +19,5 @@
       "@server/*": ["server/*"]
     }
   },
-  "include": ["src", "server", "prisma"]
+  "include": ["src", "server", "prisma", "prisma.config.ts"]
 }
