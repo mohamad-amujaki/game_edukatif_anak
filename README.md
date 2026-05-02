@@ -37,6 +37,7 @@ Buka **http://localhost:5173**.
 | [docs/architecture.md](docs/architecture.md) | Arsitektur target             |
 | [docs/database-schema.md](docs/database-schema.md) | Skema data             |
 | [docs/content-design.md](docs/content-design.md)   | Jenis mini-game & seed       |
+| [docs/PRD-feature-feedback-confetti-math-bank.md](docs/PRD-feature-feedback-confetti-math-bank.md) | PRD penambahan: confetti + SFX salah & bank soal matematika Level 1–3 |
 
 ## Script berguna
 

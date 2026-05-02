@@ -434,3 +434,4 @@ Mengacu pada **UU PDP No. 27 Tahun 2022** Indonesia + best practice global (COPP
 - [content-design.md](content-design.md) — desain mini-game konkret
 - [design-system.md](design-system.md) — visual & audio guideline
 - [roadmap.md](roadmap.md) — pembagian fase pengembangan
+- [PRD-feature-feedback-confetti-math-bank.md](PRD-feature-feedback-confetti-math-bank.md) — fitur lanjutan: confetti + SFX salah & bank soal matematika Level 1–3

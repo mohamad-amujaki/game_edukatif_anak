@@ -1,5 +1,7 @@
 import { Button } from '@/components/ui/Button';
+import { useGameFeedback } from '@/hooks/useGameFeedback';
 import { emojiForKey } from '@/lib/emoji-map';
+import { pickSessionQuestions, shuffle } from '@/lib/math-session';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 type HurufPayload = {
@@ -90,15 +92,6 @@ type Props = {
     durationSec: number;
   }) => void;
 };
-
-function shuffle<T>(arr: T[]): T[] {
-  const a = [...arr];
-  for (let i = a.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [a[i], a[j]] = [a[j], a[i]];
-  }
-  return a;
-}
 
 export function ActivityPlayer({
   activityType,
@@ -425,19 +418,35 @@ function HitungBenda({
   data: HitungPayload;
   onDone: (mistakes: number, score: number, maxScore: number) => void;
 }) {
+  const { celebrateCorrect, warnWrong, motionSafeRing } = useGameFeedback();
+  const sessionQuestions = useMemo(
+    () => pickSessionQuestions(data.questions),
+    [data.questions],
+  );
   const [idx, setIdx] = useState(0);
   const [mistakes, setMistakes] = useState(0);
-  const q = data.questions[idx];
+  const q = sessionQuestions[idx];
 
   const pick = (n: number) => {
+    if (!q) return;
     if (n === q.jawaban) {
-      if (idx + 1 >= data.questions.length) {
-        const maxScore = data.questions.length * 10;
-        const score = (data.questions.length - mistakes) * 10;
+      void celebrateCorrect();
+      if (idx + 1 >= sessionQuestions.length) {
+        const maxScore = sessionQuestions.length * 10;
+        const score = (sessionQuestions.length - mistakes) * 10;
         onDone(mistakes, score, maxScore);
       } else setIdx(idx + 1);
-    } else setMistakes((m) => m + 1);
+    } else {
+      void warnWrong();
+      setMistakes((m) => m + 1);
+    }
   };
+
+  if (!q) {
+    return (
+      <p className="p-6 text-center text-lg">Belum ada soal untuk level ini.</p>
+    );
+  }
 
   const icons = Array.from({ length: q.jumlah }, (_, i) => (
     <span key={i} className="text-5xl">
@@ -446,7 +455,7 @@ function HitungBenda({
   ));
 
   return (
-    <div className="flex flex-col gap-4 p-4">
+    <div className={`flex flex-col gap-4 p-4 ${motionSafeRing} rounded-2xl`}>
       <h2 className="font-[family-name:var(--font-display)] text-2xl font-bold text-center">
         {title}
       </h2>
@@ -465,7 +474,7 @@ function HitungBenda({
         ))}
       </div>
       <p className="text-center text-sm">
-        Soal {idx + 1}/{data.questions.length} · Salah: {mistakes}
+        Soal {idx + 1}/{sessionQuestions.length} · Salah: {mistakes}
       </p>
     </div>
   );
@@ -480,19 +489,35 @@ function Bandingkan({
   data: BandingPayload;
   onDone: (mistakes: number, score: number, maxScore: number) => void;
 }) {
+  const { celebrateCorrect, warnWrong, motionSafeRing } = useGameFeedback();
+  const sessionQuestions = useMemo(
+    () => pickSessionQuestions(data.questions),
+    [data.questions],
+  );
   const [idx, setIdx] = useState(0);
   const [mistakes, setMistakes] = useState(0);
-  const q = data.questions[idx];
+  const q = sessionQuestions[idx];
 
   const answer = (side: 'kiri' | 'kanan') => {
+    if (!q) return;
     if (side === q.jawaban) {
-      if (idx + 1 >= data.questions.length) {
-        const maxScore = data.questions.length * 10;
-        const score = (data.questions.length - mistakes) * 10;
+      void celebrateCorrect();
+      if (idx + 1 >= sessionQuestions.length) {
+        const maxScore = sessionQuestions.length * 10;
+        const score = (sessionQuestions.length - mistakes) * 10;
         onDone(mistakes, score, maxScore);
       } else setIdx(idx + 1);
-    } else setMistakes((m) => m + 1);
+    } else {
+      void warnWrong();
+      setMistakes((m) => m + 1);
+    }
   };
+
+  if (!q) {
+    return (
+      <p className="p-6 text-center text-lg">Belum ada soal untuk level ini.</p>
+    );
+  }
 
   const renderGroup = (side: 'kiri' | 'kanan') => {
     const g = side === 'kiri' ? q.kiri : q.kanan;
@@ -508,7 +533,7 @@ function Bandingkan({
   };
 
   return (
-    <div className="flex flex-col gap-5 p-4">
+    <div className={`flex flex-col gap-5 p-4 ${motionSafeRing} rounded-2xl`}>
       <h2 className="font-[family-name:var(--font-display)] text-2xl font-bold text-center">
         {title}
       </h2>
@@ -530,7 +555,7 @@ function Bandingkan({
         </button>
       </div>
       <p className="text-center text-sm">
-        Soal {idx + 1}/{data.questions.length} · Salah: {mistakes}
+        Soal {idx + 1}/{sessionQuestions.length} · Salah: {mistakes}
       </p>
     </div>
   );
@@ -545,20 +570,36 @@ function Penjumlahan({
   data: TambahPayload;
   onDone: (mistakes: number, score: number, maxScore: number) => void;
 }) {
+  const { celebrateCorrect, warnWrong, motionSafeRing } = useGameFeedback();
+  const sessionQuestions = useMemo(
+    () => pickSessionQuestions(data.questions),
+    [data.questions],
+  );
   const [idx, setIdx] = useState(0);
   const [mistakes, setMistakes] = useState(0);
-  const q = data.questions[idx];
-  const jawaban = q.a + q.b;
+  const q = sessionQuestions[idx];
+  const jawaban = q ? q.a + q.b : 0;
 
   const pick = (n: number) => {
+    if (!q) return;
     if (n === jawaban) {
-      if (idx + 1 >= data.questions.length) {
-        const maxScore = data.questions.length * 10;
-        const score = (data.questions.length - mistakes) * 10;
+      void celebrateCorrect();
+      if (idx + 1 >= sessionQuestions.length) {
+        const maxScore = sessionQuestions.length * 10;
+        const score = (sessionQuestions.length - mistakes) * 10;
         onDone(mistakes, score, maxScore);
       } else setIdx(idx + 1);
-    } else setMistakes((m) => m + 1);
+    } else {
+      void warnWrong();
+      setMistakes((m) => m + 1);
+    }
   };
+
+  if (!q) {
+    return (
+      <p className="p-6 text-center text-lg">Belum ada soal untuk level ini.</p>
+    );
+  }
 
   const left = Array.from({ length: q.a }, (_, i) => (
     <span key={`a-${i}`} className="text-5xl">
@@ -572,7 +613,7 @@ function Penjumlahan({
   ));
 
   return (
-    <div className="flex flex-col gap-4 p-4">
+    <div className={`flex flex-col gap-4 p-4 ${motionSafeRing} rounded-2xl`}>
       <h2 className="font-[family-name:var(--font-display)] text-2xl font-bold text-center">
         {title}
       </h2>
@@ -595,7 +636,7 @@ function Penjumlahan({
         ))}
       </div>
       <p className="text-center text-sm">
-        Soal {idx + 1}/{data.questions.length} · Salah: {mistakes}
+        Soal {idx + 1}/{sessionQuestions.length} · Salah: {mistakes}
       </p>
     </div>
   );
@@ -610,20 +651,36 @@ function Pengurangan({
   data: KurangPayload;
   onDone: (mistakes: number, score: number, maxScore: number) => void;
 }) {
+  const { celebrateCorrect, warnWrong, motionSafeRing } = useGameFeedback();
+  const sessionQuestions = useMemo(
+    () => pickSessionQuestions(data.questions),
+    [data.questions],
+  );
   const [idx, setIdx] = useState(0);
   const [mistakes, setMistakes] = useState(0);
-  const q = data.questions[idx];
-  const jawaban = q.a - q.b;
+  const q = sessionQuestions[idx];
+  const jawaban = q ? q.a - q.b : 0;
 
   const pick = (n: number) => {
+    if (!q) return;
     if (n === jawaban) {
-      if (idx + 1 >= data.questions.length) {
-        const maxScore = data.questions.length * 10;
-        const score = (data.questions.length - mistakes) * 10;
+      void celebrateCorrect();
+      if (idx + 1 >= sessionQuestions.length) {
+        const maxScore = sessionQuestions.length * 10;
+        const score = (sessionQuestions.length - mistakes) * 10;
         onDone(mistakes, score, maxScore);
       } else setIdx(idx + 1);
-    } else setMistakes((m) => m + 1);
+    } else {
+      void warnWrong();
+      setMistakes((m) => m + 1);
+    }
   };
+
+  if (!q) {
+    return (
+      <p className="p-6 text-center text-lg">Belum ada soal untuk level ini.</p>
+    );
+  }
 
   const all = Array.from({ length: q.a }, (_, i) => (
     <span
@@ -635,7 +692,7 @@ function Pengurangan({
   ));
 
   return (
-    <div className="flex flex-col gap-4 p-4">
+    <div className={`flex flex-col gap-4 p-4 ${motionSafeRing} rounded-2xl`}>
       <h2 className="font-[family-name:var(--font-display)] text-2xl font-bold text-center">
         {title}
       </h2>
@@ -654,7 +711,7 @@ function Pengurangan({
         ))}
       </div>
       <p className="text-center text-sm">
-        Soal {idx + 1}/{data.questions.length} · Salah: {mistakes}
+        Soal {idx + 1}/{sessionQuestions.length} · Salah: {mistakes}
       </p>
     </div>
   );
