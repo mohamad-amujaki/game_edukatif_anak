@@ -22,6 +22,19 @@ export const ILLUSTRATION_EMOJI: Record<string, string> = {
   kucing: '🐱',
   bintang: '⭐',
   hati: '❤️',
+  daun: '🍃',
+  eskrim: '🍦',
+  foto: '📷',
+  gajah: '🐘',
+  labu: '🎃',
+  nanas: '🍍',
+  orang: '🧒',
+  ular: '🐍',
+  perahu: '⛵',
+  pelangi: '🌈',
+  buku: '📚',
+  pensil: '✏️',
+  gunting: '✂️',
 };
 
 export function emojiForKey(key: string): string {

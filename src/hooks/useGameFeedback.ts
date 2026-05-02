@@ -1,23 +1,16 @@
+import {
+  GAME_FEEDBACK_SYNC_EVENT,
+  LS_MUSIC,
+  LS_PARENT_RFM,
+  LS_SFX,
+  effectiveReducedMotion,
+  effectiveSfxEnabled,
+} from '@/lib/game-feedback-sync';
 import confetti from 'canvas-confetti';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 const WRONG_THROTTLE_MS = 150;
 const CONFETTI_TICKS = 90;
-
-function sfxEnabled(): boolean {
-  try {
-    return localStorage.getItem('game-sfx-enabled') !== 'false';
-  } catch {
-    return true;
-  }
-}
-
-function prefersReducedMotion(): boolean {
-  return (
-    typeof window !== 'undefined' &&
-    window.matchMedia('(prefers-reduced-motion: reduce)').matches
-  );
-}
 
 let audioCtx: AudioContext | null = null;
 
@@ -40,7 +33,7 @@ async function resumeAudio(): Promise<void> {
 }
 
 function playCorrectTone(): void {
-  if (!sfxEnabled()) return;
+  if (!effectiveSfxEnabled()) return;
   const ctx = getAudioContext();
   if (!ctx) return;
   const t0 = ctx.currentTime;
@@ -61,7 +54,7 @@ function playCorrectTone(): void {
 }
 
 function playWrongSoft(): void {
-  if (!sfxEnabled()) return;
+  if (!effectiveSfxEnabled()) return;
   const ctx = getAudioContext();
   if (!ctx) return;
   const t0 = ctx.currentTime;
@@ -79,7 +72,7 @@ function playWrongSoft(): void {
 }
 
 function burstConfetti(): void {
-  if (prefersReducedMotion()) return;
+  if (effectiveReducedMotion()) return;
   confetti({
     particleCount: 72,
     spread: 62,
@@ -94,6 +87,22 @@ function burstConfetti(): void {
 export function useGameFeedback() {
   const lastWrongAt = useRef(0);
   const [correctPulse, setCorrectPulse] = useState(false);
+  const [, setSyncGen] = useState(0);
+
+  useEffect(() => {
+    const onSync = () => setSyncGen((n) => n + 1);
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === LS_SFX || e.key === LS_MUSIC || e.key === LS_PARENT_RFM) {
+        setSyncGen((n) => n + 1);
+      }
+    };
+    window.addEventListener(GAME_FEEDBACK_SYNC_EVENT, onSync);
+    window.addEventListener('storage', onStorage);
+    return () => {
+      window.removeEventListener(GAME_FEEDBACK_SYNC_EVENT, onSync);
+      window.removeEventListener('storage', onStorage);
+    };
+  }, []);
 
   useEffect(() => {
     if (!correctPulse) return;
@@ -104,7 +113,7 @@ export function useGameFeedback() {
   const celebrateCorrect = useCallback(async () => {
     await resumeAudio();
     playCorrectTone();
-    if (prefersReducedMotion()) {
+    if (effectiveReducedMotion()) {
       setCorrectPulse(true);
     } else {
       burstConfetti();

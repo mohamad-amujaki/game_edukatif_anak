@@ -1,5 +1,42 @@
-import type { Track } from '@prisma/client';
+import type { AgeMode, Track } from '@prisma/client';
 import { prisma } from '../db';
+
+/** Daftar ID aktivitas unlocked yang belum pernah selesai (≥1★), diurutkan seperti dashboard. */
+export async function getFirstNIncompleteUnlockedActivityIds(
+  childId: string,
+  ageMode: AgeMode,
+  limit: number,
+): Promise<string[]> {
+  const unlockedActs: Array<{ activityId: string; isCompleted: boolean }> = [];
+
+  const allLevels = await prisma.levelDefinition.findMany({
+    where: { ageMode },
+    orderBy: [{ track: 'asc' }, { order: 'asc' }],
+  });
+
+  for (const level of allLevels) {
+    const mastery = await prisma.levelMastery.findUnique({
+      where: { childId_levelId: { childId, levelId: level.id } },
+    });
+    if (!mastery?.isUnlocked) continue;
+
+    const acts = await prisma.activityDefinition.findMany({
+      where: { levelId: level.id },
+    });
+    for (const act of acts) {
+      const p = await prisma.progress.findUnique({
+        where: { childId_activityId: { childId, activityId: act.id } },
+      });
+      const isCompleted = (p?.bestStars ?? 0) >= 1;
+      unlockedActs.push({ activityId: act.id, isCompleted });
+    }
+  }
+
+  return unlockedActs
+    .filter((a) => !a.isCompleted)
+    .slice(0, limit)
+    .map((a) => a.activityId);
+}
 
 async function levelProgressPct(
   childId: string,
@@ -119,6 +156,10 @@ export async function buildDashboard(childId: string) {
 
   const incomplete = unlockedActs.filter((a) => !a.isCompleted).slice(0, 4);
 
+  const parentSettings = await prisma.parentSettings.findUnique({
+    where: { id: 'singleton' },
+  });
+
   const recentBadges = await prisma.earnedBadge.findMany({
     where: { childId },
     orderBy: { earnedAt: 'desc' },
@@ -143,6 +184,13 @@ export async function buildDashboard(childId: string) {
     },
     tracks: trackSummaries,
     todayQuests: incomplete,
+    wellness: {
+      dailyTimeCapMinutes: parentSettings?.dailyTimeCapMinutes ?? 30,
+      breakReminderMinutes: parentSettings?.breakReminderMinutes ?? 15,
+      sfxEnabled: parentSettings?.sfxEnabled ?? true,
+      musicEnabled: parentSettings?.musicEnabled ?? true,
+      reduceMotion: parentSettings?.reduceMotion ?? false,
+    },
     recentBadges: recentBadges.map((e) => ({
       id: e.badge.id,
       name: e.badge.name,

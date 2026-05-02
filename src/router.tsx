@@ -1,6 +1,28 @@
 import { api } from '@/api';
+import { adminApi } from '@/api-admin';
+import { GameFeedbackSync } from '@/components/GameFeedbackSync';
 import { Button } from '@/components/ui/Button';
 import { ActivityPlayer } from '@/features/ActivityPlayer';
+import { AdminActivityEditorPage } from '@/features/admin/AdminActivityEditorPage';
+import { AdminAnalyticsPage } from '@/features/admin/AdminAnalyticsPage';
+import { AdminAuditPage } from '@/features/admin/AdminAuditPage';
+import { AdminBankEditorPage } from '@/features/admin/AdminBankEditorPage';
+import { AdminChildDetailPage } from '@/features/admin/AdminChildDetailPage';
+import { AdminContentPage } from '@/features/admin/AdminContentPage';
+import { AdminImportExportPage } from '@/features/admin/AdminImportExportPage';
+import { AdminSettingsPage } from '@/features/admin/AdminSettingsPage';
+import { AdminShell } from '@/features/admin/AdminShell';
+import { AdminUsersPage } from '@/features/admin/AdminUsersPage';
+import { LoginPage as AdminLoginPage } from '@/features/admin/LoginPage';
+import { StickerAlbumPage } from '@/features/child/StickerAlbumPage';
+import { OnboardingFlowPage } from '@/features/onboarding/OnboardingFlowPage';
+import { SuperParentPage } from '@/features/parent/SuperParentPage';
+import { PlayWellnessOverlay } from '@/features/wellness/PlayWellnessOverlay';
+import { authClient } from '@/lib/auth-client';
+import {
+  type DevicePreferences,
+  applyDevicePreferencesToGameFeedback,
+} from '@/lib/game-feedback-sync';
 import { lastChildIdAtom, parentSessionAtom } from '@/state/atoms';
 import {
   Link,
@@ -9,6 +31,7 @@ import {
   createRootRoute,
   createRoute,
   createRouter,
+  redirect,
   useNavigate,
 } from '@tanstack/react-router';
 import { Provider as JotaiProvider } from 'jotai';
@@ -30,9 +53,28 @@ function Shell({ children }: { children: React.ReactNode }) {
   return <div className="mx-auto min-h-dvh max-w-lg pb-10">{children}</div>;
 }
 
+/** Sekali per profil anak — arahkan ke tutorial sebelum dashboard/track/play. */
+function ensureChildOnboardingGate(opts: {
+  location: { pathname: string };
+  params: Record<string, string>;
+}) {
+  const { location, params } = opts;
+  const childId = params.childId;
+  if (!childId) return;
+  if (location.pathname.includes('/onboarding')) return;
+  if (typeof window === 'undefined') return;
+  if (!localStorage.getItem(`onboarding-done-${childId}`)) {
+    throw redirect({
+      to: '/p/$childId/onboarding',
+      params: { childId },
+    });
+  }
+}
+
 const rootRoute = createRootRoute({
   component: () => (
     <JotaiProvider>
+      <GameFeedbackSync />
       <Shell>
         <header className="sticky top-0 z-10 flex items-center justify-between bg-[color:var(--color-canvas)]/95 px-4 py-3 backdrop-blur">
           <Link
@@ -198,10 +240,22 @@ function emojiAvatar(key: string): string {
   return m[key] ?? '🙂';
 }
 
+const onboardingRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/p/$childId/onboarding',
+  component: OnboardingRoutePage,
+});
+
+function OnboardingRoutePage() {
+  const { childId } = onboardingRoute.useParams();
+  return <OnboardingFlowPage childId={childId} />;
+}
+
 const childRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/p/$childId',
   component: DashboardPage,
+  beforeLoad: ensureChildOnboardingGate,
 });
 
 function DashboardPage() {
@@ -258,6 +312,14 @@ function DashboardPage() {
         </a>
       </div>
 
+      <Link
+        to="/p/$childId/stickers"
+        params={{ childId }}
+        className="block rounded-2xl bg-amber-50 p-4 text-center font-bold text-amber-900 shadow-inner ring-1 ring-amber-200"
+      >
+        Album stiker
+      </Link>
+
       <div>
         <p className="mb-2 font-semibold">Quest hari ini</p>
         <div className="space-y-2">
@@ -287,6 +349,7 @@ const trackRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/p/$childId/track/$trackId',
   component: TrackPage,
+  beforeLoad: ensureChildOnboardingGate,
 });
 
 function TrackPage() {
@@ -347,6 +410,7 @@ const levelDetailRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/p/$childId/level/$levelId',
   component: LevelDetailPage,
+  beforeLoad: ensureChildOnboardingGate,
 });
 
 function LevelDetailPage() {
@@ -397,7 +461,20 @@ const playRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/p/$childId/play/$activityId',
   component: PlayPage,
+  beforeLoad: ensureChildOnboardingGate,
 });
+
+const stickerAlbumRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/p/$childId/stickers',
+  component: StickerAlbumRoutePage,
+  beforeLoad: ensureChildOnboardingGate,
+});
+
+function StickerAlbumRoutePage() {
+  const { childId } = stickerAlbumRoute.useParams();
+  return <StickerAlbumPage childId={childId} />;
+}
 
 function PlayPage() {
   const navigate = useNavigate();
@@ -408,6 +485,7 @@ function PlayPage() {
   const [result, setResult] = useState<Record<string, unknown> | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [replayKey, setReplayKey] = useState(0);
+  const [wellness, setWellness] = useState<DevicePreferences | null>(null);
 
   useEffect(() => {
     api
@@ -416,16 +494,39 @@ function PlayPage() {
       .catch(() => setErr('Tidak dapat memuat aktivitas'));
   }, [activityId]);
 
+  useEffect(() => {
+    api
+      .getDevicePreferences()
+      .then(setWellness)
+      .catch(() =>
+        setWellness({
+          dailyTimeCapMinutes: 30,
+          breakReminderMinutes: 15,
+          sfxEnabled: true,
+          musicEnabled: true,
+          reduceMotion: false,
+        }),
+      );
+  }, []);
+
   if (err) return <p className="p-6 text-center text-red-600">{err}</p>;
   if (!act) return <p className="p-6 text-center">Memuat permainan…</p>;
 
   return (
     <div>
+      {wellness ? (
+        <PlayWellnessOverlay
+          childId={childId}
+          dailyCapMinutes={wellness.dailyTimeCapMinutes}
+          breakReminderMinutes={wellness.breakReminderMinutes}
+        />
+      ) : null}
       <ActivityPlayer
         key={replayKey}
         activityType={act.type}
         payload={act.payload}
         title={act.title}
+        instructionText={act.voiceOverKeys?.instruksi}
         onComplete={async (r) => {
           try {
             const res = await api.submitActivity(childId, activityId, {
@@ -485,6 +586,12 @@ const parentRoute = createRoute({
   component: ParentPage,
 });
 
+const parentSuperRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/parent/super',
+  component: SuperParentPage,
+});
+
 function ParentPage() {
   const [session, setSession] = useAtom(parentSessionAtom);
   const [pin, setPin] = useState('');
@@ -496,10 +603,43 @@ function ParentPage() {
   const [recoverQ, setRecoverQ] = useState('Siapa nama hewan peliharaanmu?');
   const [recoverA, setRecoverA] = useState('');
   const [err, setErr] = useState<string | null>(null);
+  const [isSuperParent, setIsSuperParent] = useState(false);
+  const [parentSettings, setParentSettings] = useState<{
+    dailyTimeCapMinutes: number;
+    breakReminderMinutes: number;
+    musicEnabled: boolean;
+    sfxEnabled: boolean;
+    reduceMotion: boolean;
+  } | null>(null);
+  const [settingsSaved, setSettingsSaved] = useState(false);
 
   useEffect(() => {
     api.getProfiles().then(setProfiles);
   }, []);
+
+  useEffect(() => {
+    if (!session) {
+      setIsSuperParent(false);
+      setParentSettings(null);
+      return;
+    }
+    api
+      .getParentSettings(session)
+      .then((s) => {
+        setIsSuperParent(s.isSuperParent);
+        setParentSettings({
+          dailyTimeCapMinutes: s.dailyTimeCapMinutes,
+          breakReminderMinutes: s.breakReminderMinutes,
+          musicEnabled: s.musicEnabled,
+          sfxEnabled: s.sfxEnabled,
+          reduceMotion: s.reduceMotion,
+        });
+      })
+      .catch(() => {
+        setIsSuperParent(false);
+        setParentSettings(null);
+      });
+  }, [session]);
 
   const verify = async () => {
     setErr(null);
@@ -632,21 +772,437 @@ function ParentPage() {
           </p>
         </div>
       ) : null}
+
+      {parentSettings ? (
+        <div className="space-y-3 rounded-2xl bg-white p-4 shadow">
+          <p className="font-bold">Pengaturan perangkat</p>
+          <p className="text-xs text-neutral-600">
+            Batas waktu & pengingat istirahat berlaku saat anak bermain (sesi
+            terpasang).
+          </p>
+          <label className="block text-sm">
+            <span className="text-neutral-700">
+              Batas main harian: {parentSettings.dailyTimeCapMinutes} menit
+            </span>
+            <input
+              type="range"
+              min={10}
+              max={120}
+              step={5}
+              className="mt-1 w-full"
+              value={parentSettings.dailyTimeCapMinutes}
+              onChange={(e) =>
+                setParentSettings((prev) =>
+                  prev
+                    ? {
+                        ...prev,
+                        dailyTimeCapMinutes: Number(e.target.value),
+                      }
+                    : prev,
+                )
+              }
+            />
+          </label>
+          <label className="block text-sm">
+            <span className="text-neutral-700">
+              Pengingat istirahat tiap: {parentSettings.breakReminderMinutes}{' '}
+              menit
+            </span>
+            <input
+              type="range"
+              min={5}
+              max={45}
+              step={5}
+              className="mt-1 w-full"
+              value={parentSettings.breakReminderMinutes}
+              onChange={(e) =>
+                setParentSettings((prev) =>
+                  prev
+                    ? {
+                        ...prev,
+                        breakReminderMinutes: Number(e.target.value),
+                      }
+                    : prev,
+                )
+              }
+            />
+          </label>
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={parentSettings.musicEnabled}
+              onChange={(e) =>
+                setParentSettings((prev) =>
+                  prev ? { ...prev, musicEnabled: e.target.checked } : prev,
+                )
+              }
+            />
+            Musik latar
+          </label>
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={parentSettings.sfxEnabled}
+              onChange={(e) =>
+                setParentSettings((prev) =>
+                  prev ? { ...prev, sfxEnabled: e.target.checked } : prev,
+                )
+              }
+            />
+            Efek suara (jawaban benar/salah)
+          </label>
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={parentSettings.reduceMotion}
+              onChange={(e) =>
+                setParentSettings((prev) =>
+                  prev ? { ...prev, reduceMotion: e.target.checked } : prev,
+                )
+              }
+            />
+            Kurangi animasi (motion reduce)
+          </label>
+          <Button
+            className="w-full"
+            onClick={async () => {
+              if (!session || !parentSettings) return;
+              setSettingsSaved(false);
+              try {
+                await api.patchParentSettings(session, parentSettings);
+                applyDevicePreferencesToGameFeedback({
+                  dailyTimeCapMinutes: parentSettings.dailyTimeCapMinutes,
+                  breakReminderMinutes: parentSettings.breakReminderMinutes,
+                  sfxEnabled: parentSettings.sfxEnabled,
+                  musicEnabled: parentSettings.musicEnabled,
+                  reduceMotion: parentSettings.reduceMotion,
+                });
+                setSettingsSaved(true);
+              } catch {
+                setErr('Gagal menyimpan pengaturan');
+              }
+            }}
+          >
+            Simpan pengaturan
+          </Button>
+          {settingsSaved ? (
+            <p className="text-center text-sm text-green-700">Tersimpan.</p>
+          ) : null}
+        </div>
+      ) : null}
+
       <Button variant="ghost" onClick={() => setSession(null)}>
         Keluar sesi
       </Button>
+      {isSuperParent ? (
+        <Link
+          to="/parent/super"
+          className="block w-full rounded-xl border border-primary-200 bg-primary-50 py-3 text-center text-sm font-semibold text-primary-800"
+        >
+          Mode super-orang tua — kelola profil anak
+        </Link>
+      ) : null}
       <a href="/">Ke beranda anak</a>
     </div>
   );
 }
 
+// === Admin Routes ===
+
+function AdminDashboardPage() {
+  const [data, setData] = useState<Awaited<
+    ReturnType<typeof adminApi.getOverview>
+  > | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+
+  useEffect(() => {
+    adminApi
+      .getOverview()
+      .then(setData)
+      .catch((e: unknown) =>
+        setErr(e instanceof Error ? e.message : 'Gagal memuat ringkasan'),
+      );
+  }, []);
+
+  const r1 =
+    data?.retentionD1Pct == null
+      ? '—'
+      : `${data.retentionD1Pct}% · n=${data.retentionCohortD1}`;
+  const r7 =
+    data?.retentionD7Pct == null
+      ? '—'
+      : `${data.retentionD7Pct}% · n=${data.retentionCohortD7}`;
+
+  return (
+    <div className="space-y-8">
+      <div>
+        <h1 className="text-3xl font-bold">Dashboard Admin</h1>
+        <p className="mt-1 text-neutral-600">
+          Lima metrik utama MVP + ringkasan pengguna.
+        </p>
+        {data?._cached ? (
+          <p className="mt-1 text-xs text-neutral-400">
+            Angka dari cache (≤5 menit).
+          </p>
+        ) : null}
+      </div>
+      {err ? <p className="text-red-600 text-sm">{err}</p> : null}
+
+      <section>
+        <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-neutral-500">
+          Metrik utama (PRD §7)
+        </h2>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+          <DashCard label="DAU (hari ini)" value={data?.dauToday} />
+          <DashCard label="MAU (30 hari)" value={data?.mau30d} />
+          <DashCard label="Retensi D1" value={r1} />
+          <DashCard label="Retensi D7" value={r7} />
+          <DashCard
+            label="Total waktu main"
+            value={
+              data != null ? `${data.totalPlayTimeMinutes} menit` : undefined
+            }
+          />
+        </div>
+      </section>
+
+      <section>
+        <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-neutral-500">
+          Ringkasan
+        </h2>
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+          <DashCard label="Total anak" value={data?.totalAnak} />
+          <DashCard label="Total sesi main" value={data?.totalSessions} />
+          <DashCard
+            label="Rata-rata bintang (global)"
+            value={data?.avgStarsGlobal}
+          />
+        </div>
+      </section>
+
+      <p className="text-sm text-neutral-500">
+        Tabel penyelesaian level & bintang per aktivitas ada di halaman{' '}
+        <Link
+          to="/admin/analytics"
+          className="font-medium text-primary-600 hover:underline"
+        >
+          Analytics
+        </Link>
+        .
+      </p>
+      <p className="italic text-neutral-500">
+        Selamat datang di Panel Kontrol Bimo Belajar.
+      </p>
+    </div>
+  );
+}
+
+function DashCard({
+  label,
+  value,
+}: {
+  label: string;
+  value: string | number | undefined;
+}) {
+  return (
+    <div className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm">
+      <p className="text-xs font-semibold uppercase text-neutral-500">
+        {label}
+      </p>
+      <p className="mt-2 text-3xl font-bold tabular-nums">
+        {value === undefined ? '…' : String(value)}
+      </p>
+    </div>
+  );
+}
+
+function AdminChildrenPage() {
+  const [rows, setRows] = useState<
+    Awaited<ReturnType<typeof adminApi.getChildren>>
+  >([]);
+  const [err, setErr] = useState<string | null>(null);
+
+  useEffect(() => {
+    adminApi
+      .getChildren()
+      .then(setRows)
+      .catch((e: unknown) =>
+        setErr(e instanceof Error ? e.message : 'Gagal memuat daftar anak'),
+      );
+  }, []);
+
+  return (
+    <div className="space-y-6">
+      <h1 className="text-3xl font-bold">Manajemen Anak</h1>
+      <p className="text-neutral-600">
+        Daftar profil anak di perangkat ini (sumber:{' '}
+        <code className="rounded bg-neutral-100 px-1">
+          GET /api/admin/children
+        </code>
+        ).
+      </p>
+      {err ? <p className="text-sm text-red-600">{err}</p> : null}
+      <div className="overflow-x-auto rounded-2xl border border-neutral-200 bg-white">
+        <table className="min-w-full text-left text-sm">
+          <thead className="border-b border-neutral-100 bg-neutral-50">
+            <tr>
+              <th className="px-4 py-3 font-semibold">Nama</th>
+              <th className="px-4 py-3 font-semibold">Mode</th>
+              <th className="px-4 py-3 font-semibold">Avatar</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((p) => (
+              <tr key={p.id} className="border-b border-neutral-50">
+                <td className="px-4 py-3">
+                  <Link
+                    to="/admin/children/$childId"
+                    params={{ childId: p.id }}
+                    className="font-medium text-primary-600 hover:underline"
+                  >
+                    {p.name}
+                  </Link>
+                </td>
+                <td className="px-4 py-3">{p.ageMode}</td>
+                <td className="px-4 py-3 font-mono text-xs">{p.avatarKey}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        {!err && rows.length === 0 ? (
+          <p className="px-4 py-6 text-center text-neutral-400">
+            Belum ada profil anak.
+          </p>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+const adminRootRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/admin',
+  component: AdminShell,
+  beforeLoad: async ({ location }) => {
+    // Only redirect to login if not already on login page
+    const session = await authClient.getSession();
+    if (!session && location.pathname !== '/admin/login') {
+      throw redirect({ to: '/admin/login' });
+    }
+  },
+});
+
+const adminLoginRoute = createRoute({
+  getParentRoute: () => adminRootRoute,
+  path: '/login',
+  component: AdminLoginPage,
+});
+
+const adminIndexRoute = createRoute({
+  getParentRoute: () => adminRootRoute,
+  path: '/',
+  component: AdminDashboardPage,
+});
+
+const adminChildrenRoute = createRoute({
+  getParentRoute: () => adminRootRoute,
+  path: '/children',
+  component: AdminChildrenPage,
+});
+
+const adminChildDetailRoute = createRoute({
+  getParentRoute: () => adminRootRoute,
+  path: '/children/$childId',
+  component: AdminChildDetailShell,
+});
+
+function AdminChildDetailShell() {
+  const { childId } = adminChildDetailRoute.useParams();
+  return <AdminChildDetailPage childId={childId} />;
+}
+
+const adminAuditRoute = createRoute({
+  getParentRoute: () => adminRootRoute,
+  path: '/audit',
+  component: AdminAuditPage,
+});
+
+const adminContentRoute = createRoute({
+  getParentRoute: () => adminRootRoute,
+  path: '/content',
+  component: AdminContentPage,
+});
+
+const adminActivityDetailRoute = createRoute({
+  getParentRoute: () => adminRootRoute,
+  path: '/content/activities/$activityId',
+  component: AdminActivityDetailShell,
+});
+
+function AdminActivityDetailShell() {
+  const { activityId } = adminActivityDetailRoute.useParams();
+  return <AdminActivityEditorPage activityId={activityId} />;
+}
+
+const adminBankRoute = createRoute({
+  getParentRoute: () => adminRootRoute,
+  path: '/banks/$activityId',
+  component: AdminBankShell,
+});
+
+function AdminBankShell() {
+  const { activityId } = adminBankRoute.useParams();
+  return <AdminBankEditorPage activityId={activityId} />;
+}
+
+const adminAnalyticsRoute = createRoute({
+  getParentRoute: () => adminRootRoute,
+  path: '/analytics',
+  component: AdminAnalyticsPage,
+});
+
+const adminSettingsRoute = createRoute({
+  getParentRoute: () => adminRootRoute,
+  path: '/settings',
+  component: AdminSettingsPage,
+});
+
+const adminImportExportRoute = createRoute({
+  getParentRoute: () => adminRootRoute,
+  path: '/import-export',
+  component: AdminImportExportPage,
+});
+
+const adminUsersRoute = createRoute({
+  getParentRoute: () => adminRootRoute,
+  path: '/users',
+  component: AdminUsersPage,
+});
+
 const routeTree = rootRoute.addChildren([
   indexRoute,
+  onboardingRoute,
   childRoute,
   trackRoute,
   levelDetailRoute,
   playRoute,
+  stickerAlbumRoute,
   parentRoute,
+  parentSuperRoute,
+  adminRootRoute.addChildren([
+    adminIndexRoute,
+    adminLoginRoute,
+    adminChildrenRoute,
+    adminChildDetailRoute,
+    adminAuditRoute,
+    adminContentRoute,
+    adminActivityDetailRoute,
+    adminBankRoute,
+    adminAnalyticsRoute,
+    adminSettingsRoute,
+    adminImportExportRoute,
+    adminUsersRoute,
+  ]),
 ]);
 
 export const router = createRouter({ routeTree });

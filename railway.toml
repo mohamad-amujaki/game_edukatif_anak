@@ -1,0 +1,12 @@
+# Hono API + Prisma + PostgreSQL (lihat README: "Deploy API (Railway)").
+# Build ringan: hanya generate Prisma (tanpa `vite build`). Start: migrasi lalu server.
+
+[build]
+builder = "nixpacks"
+buildCommand = "pnpm exec prisma generate"
+
+[deploy]
+startCommand = "pnpm run start"
+healthcheckPath = "/api/health"
+healthcheckTimeout = 100
+restartPolicyType = "ON_FAILURE"

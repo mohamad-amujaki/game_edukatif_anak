@@ -1,5 +1,6 @@
 import type { Prisma } from '@prisma/client';
 import { prisma } from '../db';
+import { syncAndAwardDailyQuestBonus } from './daily-quest';
 import { refreshMasteryForChild } from './mastery';
 import { computeXp, starsFromMistakes } from './stars';
 import { updateStreakAfterPlay } from './streak';
@@ -230,7 +231,36 @@ export async function submitActivity(args: {
 
   await prisma.xpLog.createMany({ data: xpLogs });
 
+  const unlockedBefore = new Set(
+    (
+      await prisma.levelMastery.findMany({
+        where: { childId, isUnlocked: true },
+        select: { levelId: true },
+      })
+    ).map((r) => r.levelId),
+  );
+
   await refreshMasteryForChild(childId, child.ageMode);
+
+  const newlyUnlocked = await prisma.levelMastery.findMany({
+    where: { childId, isUnlocked: true },
+    select: { levelId: true },
+  });
+  let levelUpXp = 0;
+  for (const { levelId } of newlyUnlocked) {
+    if (unlockedBefore.has(levelId)) continue;
+    levelUpXp += 50;
+    await prisma.xpLog.create({
+      data: {
+        childId,
+        amount: 50,
+        source: 'LEVEL_UP',
+        refId: levelId,
+      },
+    });
+  }
+
+  const questXp = await syncAndAwardDailyQuestBonus(childId, child.ageMode);
 
   const activitiesInLevel = await prisma.activityDefinition.findMany({
     where: { levelId: activity.levelId },
@@ -284,10 +314,13 @@ export async function submitActivity(args: {
 
   const streakRow = await prisma.dailyStreak.findUnique({ where: { childId } });
 
+  const bonusXp = levelUpXp + questXp;
+  const totalEarnedThisSubmit = xpAmount + bonusXp;
+
   return {
     stars,
     starsImproved,
-    xpEarned: xpAmount,
+    xpEarned: totalEarnedThisSubmit,
     totalXp: await totalXp(childId),
     newSticker,
     newBadges,

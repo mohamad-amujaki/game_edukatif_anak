@@ -632,77 +632,58 @@ const sessionEndedSchema = z.object({
 
 ---
 
-## 9. Routing Implementation Sketch (Hono)
+## 9. Implementasi routing Hono (kode nyata)
 
-`src/server/app.ts`:
+Sumber kebenaran: `server/app.ts`, `server/admin.ts`, `server/routes/web/`. Rute permainan & orang tua digabung lewat `webApi` (beberapa sub-app Hono), lalu admin di `/api/admin`, lalu better-auth di `/api/auth/*`.
 
-```ts
-import { Hono } from 'hono';
-import { logger } from 'hono/logger';
-import { cors } from 'hono/cors';
-import { profilesRoute } from './routes/profiles';
-import { levelsRoute } from './routes/levels';
-import { activitiesRoute } from './routes/activities';
-import { parentRoute } from './routes/parent';
-import { wellnessRoute } from './routes/wellness';
-import { errorHandler } from './middleware/error';
-
-export const app = new Hono()
-  .use('*', logger())
-  .use('*', cors({ origin: 'same-origin' }))
-  .onError(errorHandler);
-
-app.route('/api/profiles', profilesRoute);
-app.route('/api/profiles', activitiesRoute);   // nested: /:childId/activities/:id/submit
-app.route('/api/profiles', wellnessRoute);     // nested: /:childId/sessions/...
-app.route('/api/profiles', levelsRoute);       // nested
-app.route('/api/levels', levelsRoute);         // /:id (detail standalone)
-app.route('/api/activities', activitiesRoute); // /:id (detail standalone)
-app.route('/api/parent', parentRoute);
-
-export type AppType = typeof app; // untuk Hono RPC client (opsional)
-```
-
-`src/server/routes/profiles.ts` (contoh):
+**Entry & komposisi (ringkas):**
 
 ```ts
+// server/app.ts (disederhanakan)
 import { Hono } from 'hono';
-import { zValidator } from '@hono/zod-validator';
-import { createProfileSchema, childProfileSchema } from '../utils/schemas';
-import { prisma } from '../db/client';
+import { adminRouter } from './admin';
+import { auth } from './auth';
+import { webApi } from './routes/web';
 
-export const profilesRoute = new Hono()
-  .get('/', async (c) => {
-    const profiles = await prisma.childProfile.findMany({ orderBy: { createdAt: 'asc' } });
-    return c.json({ data: profiles });
-  })
-  .post('/', zValidator('json', createProfileSchema), async (c) => {
-    const input = c.req.valid('json');
-    const count = await prisma.childProfile.count();
-    if (count >= 4) {
-      return c.json({ error: { code: 'CONFLICT', message: 'Max 4 profil per device' } }, 409);
-    }
-    const profile = await prisma.childProfile.create({ data: input });
-    return c.json({ data: profile }, 201);
-  });
+const api = new Hono()
+  .use(/* cors, prettyJSON */);
+
+api.route('/api/admin', adminRouter);
+api.route('/', webApi);
+
+export type AppType = typeof api; // sebelum better-auth
+
+api.on(['POST', 'GET'], '/api/auth/*', (c) => auth.handler(c.req.raw));
+export const app = api;
 ```
+
+- **`export type AppType`** harus **sebelum** `api.on(..., '/api/auth/*', …)` agar tipe klien Hono RPC tidak tercampur wildcard auth.
+- **Domain web:** `server/routes/web/index.ts` memasang `profilesCrudApp`, `gameplayApp`, `parentAreaApp` (masing-masing mendefinisikan path penuh `/api/...`).
+
+**Klien frontend** memakai `hono/client` + `AppType`: lihat `src/lib/hono-client.ts`, `src/api.ts`, `src/api-admin.ts`. Detail arsitektur: [architecture.md — Backend & API client (implementasi aktual)](architecture.md#backend--api-client-implementasi-aktual).
+
+> **Sketsa lama (subrouter per resource)** di bawah ini **bukan** struktur folder saat ini; disimpan hanya sebagai referensi pola Hono `app.route` bila nanti dipecah beda lagi.
 
 ---
 
 ## 10. FE API Client Convention
 
-`src/lib/api-client.ts` membungkus `fetch` dengan:
-- Auto-include `X-Parent-Session` jika ada di Jotai atom.
-- Parse response dengan Zod schema.
-- Throw typed error untuk error code yang dikenal.
+**Implementasi saat ini** memakai **Hono RPC** (`hc<AppType>`) dan helper `unwrapData` / parser admin, bukan `src/lib/api-client.ts` generik. Path HTTP diselaraskan lewat chain klien, bukan string template manual, di `src/api.ts` dan `src/api-admin.ts`.
 
-Contoh penggunaan dengan TanStack Query:
+Konvensi di bawah ini menggambarkan **pol** pembungkus fetch + TanStack Query yang masih bisa dipakai bersama data dari `api.*`:
+
+- Header `X-Parent-Session` untuk rute orang tua — di-set eksplisit di pemanggilan RPC yang relevan.
+- Error dari API mengikuti `{ error: { code, message } }` atau `{ error: string }` (admin); parser ada di `unwrapData` / `parseAdminResponse`.
+
+Contoh penggunaan dengan TanStack Query memanggil modul `api` (bukan string URL manual):
 
 ```ts
+import { api } from '@/api';
+
 export function useDashboard(childId: string) {
   return useQuery({
     queryKey: ['dashboard', childId],
-    queryFn: () => apiClient.get(`/api/profiles/${childId}/dashboard`, dashboardSchema),
+    queryFn: () => api.getDashboard(childId),
     staleTime: 30_000,
   });
 }
@@ -710,12 +691,17 @@ export function useDashboard(childId: string) {
 export function useSubmitActivity() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (input: SubmitActivityInput) =>
-      apiClient.post(
-        `/api/profiles/${input.childId}/activities/${input.activityId}/submit`,
-        input.body,
-        submitResultSchema,
-      ),
+    mutationFn: (input: {
+      childId: string;
+      activityId: string;
+      body: {
+        score: number;
+        maxScore: number;
+        mistakes: number;
+        durationSec: number;
+      };
+    }) =>
+      api.submitActivity(input.childId, input.activityId, input.body),
     onSuccess: (_data, vars) => {
       queryClient.invalidateQueries({ queryKey: ['dashboard', vars.childId] });
       queryClient.invalidateQueries({ queryKey: ['levels', vars.childId] });
@@ -756,7 +742,7 @@ flowchart TD
 
 ## 13. Open Questions
 
-- [ ] Apakah pakai **Hono RPC client** (type-safe via export `AppType`) atau cukup wrapper fetch + Zod manual?
+- [x] **Hono RPC client** — `AppType` di `server/app.ts` + `hc` di `src/lib/hono-client.ts` + `api.ts` / `api-admin.ts` (path diselaraskan server; inferensi chain penuh terbatas pada router besar, lihat komentar di `hono-client.ts`).
 - [ ] Untuk parent session token: in-memory only, atau persist di sessionStorage (trade-off: convenience vs security)?
 - [ ] Heartbeat 30 detik: cukup atau perlu lebih sering (15 detik) untuk tracking lebih akurat?
 - [ ] Apakah `submit` harus include semua `answers` untuk audit, atau cukup score+mistakes?

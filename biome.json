@@ -12,5 +12,13 @@
   "javascript": {
     "formatter": { "quoteStyle": "single", "semicolons": "always" }
   },
-  "files": { "ignore": ["node_modules", "dist", "prisma/migrations"] }
+  "files": {
+    "ignore": [
+      "node_modules",
+      "dist",
+      "prisma/migrations",
+      "test-results",
+      "playwright-report"
+    ]
+  }
 }

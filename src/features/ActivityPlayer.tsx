@@ -1,5 +1,6 @@
 import { Button } from '@/components/ui/Button';
 import { useGameFeedback } from '@/hooks/useGameFeedback';
+import { useInstructionSpeech } from '@/hooks/useInstructionSpeech';
 import { emojiForKey } from '@/lib/emoji-map';
 import { pickSessionQuestions, shuffle } from '@/lib/math-session';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -84,6 +85,8 @@ type Props = {
   activityType: string;
   payload: unknown;
   title: string;
+  /** Teks instruksi untuk VO (Web Speech API, id-ID). */
+  instructionText?: string;
   instructionAudio?: string;
   onComplete: (result: {
     mistakes: number;
@@ -97,8 +100,11 @@ export function ActivityPlayer({
   activityType,
   payload,
   title,
+  instructionText,
   onComplete,
 }: Props) {
+  useInstructionSpeech(instructionText);
+
   const started = useRef(Date.now());
   const wrapped = useMemo(() => {
     const p = payload as Record<string, unknown>;
@@ -191,7 +197,15 @@ function HurufGambar({
   data: HurufPayload;
   onDone: (mistakes: number, score: number, maxScore: number) => void;
 }) {
-  const pairs = data.shuffle !== false ? shuffle(data.pairs) : data.pairs;
+  const { celebrateCorrect, warnWrong, motionSafeRing } = useGameFeedback();
+  const sessionPairs = useMemo(
+    () => pickSessionQuestions(data.pairs),
+    [data.pairs],
+  );
+  const pairs = useMemo(
+    () => (data.shuffle !== false ? shuffle(sessionPairs) : sessionPairs),
+    [data.shuffle, sessionPairs],
+  );
   const [idx, setIdx] = useState(0);
   const [mistakes, setMistakes] = useState(0);
   const [letters, setLetters] = useState<string[]>(() =>
@@ -199,9 +213,16 @@ function HurufGambar({
   );
   const current = pairs[idx];
 
+  if (pairs.length === 0) {
+    return (
+      <p className="p-6 text-center text-lg">Belum ada soal untuk level ini.</p>
+    );
+  }
+
   const handleLetter = (h: string) => {
     if (!current) return;
     if (h === current.huruf) {
+      void celebrateCorrect();
       if (idx + 1 >= pairs.length) {
         const maxScore = pairs.length * 10;
         const score = (pairs.length - mistakes) * 10;
@@ -211,12 +232,13 @@ function HurufGambar({
         setIdx(idx + 1);
       }
     } else {
+      void warnWrong();
       setMistakes((m) => m + 1);
     }
   };
 
   return (
-    <div className="flex flex-col gap-6 p-4">
+    <div className={`flex flex-col gap-6 p-4 ${motionSafeRing} rounded-2xl`}>
       <h2 className="font-[family-name:var(--font-display)] text-2xl font-bold text-center">
         {title}
       </h2>
@@ -258,18 +280,24 @@ function SusunSukuKata({
   data: SusunPayload;
   onDone: (mistakes: number, score: number, maxScore: number) => void;
 }) {
+  const { celebrateCorrect, warnWrong, motionSafeRing } = useGameFeedback();
+  const sessionQuestions = useMemo(
+    () => pickSessionQuestions(data.questions),
+    [data.questions],
+  );
   const [qIdx, setQIdx] = useState(0);
   const [mistakes, setMistakes] = useState(0);
-  const q = data.questions[qIdx];
+  const q = sessionQuestions[qIdx];
   const [slots, setSlots] = useState<string[]>([]);
   const [available, setAvailable] = useState<string[]>([]);
 
   useEffect(() => {
-    const nq = data.questions[qIdx];
+    const nq = sessionQuestions[qIdx];
+    if (!nq) return;
     const n = nq.targetKata.split(/\s+/).filter(Boolean).length;
     setSlots(Array(n).fill(''));
     setAvailable(shuffle([...nq.sukuKataKepingan]));
-  }, [qIdx, data]);
+  }, [qIdx, sessionQuestions]);
 
   const placeChip = (chip: string) => {
     const idxChip = available.indexOf(chip);
@@ -286,14 +314,16 @@ function SusunSukuKata({
     setSlots(next);
 
     if (next.every((s) => s !== '') && next.join(' ') === q.targetKata) {
-      if (qIdx + 1 >= data.questions.length) {
-        const maxScore = data.questions.length * 10;
-        const score = (data.questions.length - mistakes) * 10;
+      void celebrateCorrect();
+      if (qIdx + 1 >= sessionQuestions.length) {
+        const maxScore = sessionQuestions.length * 10;
+        const score = (sessionQuestions.length - mistakes) * 10;
         onDone(mistakes, score, maxScore);
       } else {
         setQIdx((i) => i + 1);
       }
     } else if (next.every((s) => s !== '') && next.join(' ') !== q.targetKata) {
+      void warnWrong();
       setMistakes((m) => m + 1);
       const n = q.targetKata.split(/\s+/).filter(Boolean).length;
       setSlots(Array(n).fill(''));
@@ -310,8 +340,14 @@ function SusunSukuKata({
     setAvailable((av) => [...av, chip]);
   };
 
+  if (!q) {
+    return (
+      <p className="p-6 text-center text-lg">Belum ada soal untuk level ini.</p>
+    );
+  }
+
   return (
-    <div className="flex flex-col gap-4 p-4">
+    <div className={`flex flex-col gap-4 p-4 ${motionSafeRing} rounded-2xl`}>
       <h2 className="font-[family-name:var(--font-display)] text-2xl font-bold text-center">
         {title}
       </h2>
@@ -345,7 +381,7 @@ function SusunSukuKata({
         ))}
       </div>
       <p className="text-center text-sm">
-        Soal {qIdx + 1}/{data.questions.length} · Salah: {mistakes}
+        Soal {qIdx + 1}/{sessionQuestions.length} · Salah: {mistakes}
       </p>
     </div>
   );
@@ -360,31 +396,48 @@ function BacaKalimat({
   data: BacaPayload;
   onDone: (mistakes: number, score: number, maxScore: number) => void;
 }) {
+  const { celebrateCorrect, warnWrong, motionSafeRing } = useGameFeedback();
+  const sessionQuestions = useMemo(
+    () => pickSessionQuestions(data.questions),
+    [data.questions],
+  );
   const [idx, setIdx] = useState(0);
   const [mistakes, setMistakes] = useState(0);
-  const q = data.questions[idx];
+  const q = sessionQuestions[idx];
   const [opts, setOpts] = useState<string[]>(() =>
-    shuffle([q.gambarBenar, ...q.gambarSalah]),
+    q ? shuffle([q.gambarBenar, ...q.gambarSalah]) : [],
   );
 
   useEffect(() => {
-    const nq = data.questions[idx];
+    const nq = sessionQuestions[idx];
+    if (!nq) return;
     setOpts(shuffle([nq.gambarBenar, ...nq.gambarSalah]));
-  }, [idx, data.questions]);
+  }, [idx, sessionQuestions]);
 
   const pick = (key: string) => {
+    if (!q) return;
     const ok = key === q.gambarBenar;
     if (ok) {
-      if (idx + 1 >= data.questions.length) {
-        const maxScore = data.questions.length * 10;
-        const score = (data.questions.length - mistakes) * 10;
+      void celebrateCorrect();
+      if (idx + 1 >= sessionQuestions.length) {
+        const maxScore = sessionQuestions.length * 10;
+        const score = (sessionQuestions.length - mistakes) * 10;
         onDone(mistakes, score, maxScore);
       } else setIdx(idx + 1);
-    } else setMistakes((m) => m + 1);
+    } else {
+      void warnWrong();
+      setMistakes((m) => m + 1);
+    }
   };
 
+  if (!q) {
+    return (
+      <p className="p-6 text-center text-lg">Belum ada soal untuk level ini.</p>
+    );
+  }
+
   return (
-    <div className="flex flex-col gap-4 p-4">
+    <div className={`flex flex-col gap-4 p-4 ${motionSafeRing} rounded-2xl`}>
       <h2 className="font-[family-name:var(--font-display)] text-2xl font-bold text-center">
         {title}
       </h2>
@@ -403,7 +456,7 @@ function BacaKalimat({
         ))}
       </div>
       <p className="text-center text-sm">
-        Soal {idx + 1}/{data.questions.length} · Salah: {mistakes}
+        Soal {idx + 1}/{sessionQuestions.length} · Salah: {mistakes}
       </p>
     </div>
   );

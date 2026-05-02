@@ -1,69 +1,73 @@
-const BASE = '';
+import type { DevicePreferences } from '@/lib/game-feedback-sync';
+import { hcApi, unwrapData } from '@/lib/hono-client';
 
 export type ApiError = { code: string; message: string };
 
-async function parse<T>(res: Response): Promise<T> {
-  const json = (await res.json()) as { data?: T; error?: ApiError };
-  if (!res.ok || json.error) {
-    throw new Error(json.error?.message ?? res.statusText);
-  }
-  return json.data as T;
-}
+type ProfileRow = {
+  id: string;
+  name: string;
+  avatarKey: string;
+  ageMode: string;
+  createdAt: string;
+};
 
 export const api = {
-  getProfiles: async () => {
-    const res = await fetch(`${BASE}/api/profiles`);
-    return parse<
-      Array<{
-        id: string;
-        name: string;
-        avatarKey: string;
-        ageMode: string;
-        createdAt: string;
-      }>
-    >(res);
-  },
+  getProfiles: async () =>
+    unwrapData<Array<ProfileRow>>(await hcApi.api.profiles.$get()),
 
   createProfile: async (body: {
     name: string;
     avatarKey: string;
     ageMode: 'TK' | 'SD1';
-  }) => {
-    const res = await fetch(`${BASE}/api/profiles`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    });
-    return parse<{
-      id: string;
-      name: string;
-      avatarKey: string;
-      ageMode: string;
-      createdAt: string;
-    }>(res);
-  },
+  }) => unwrapData<ProfileRow>(await hcApi.api.profiles.$post({ json: body })),
 
-  getDashboard: async (childId: string) => {
-    const res = await fetch(`${BASE}/api/profiles/${childId}/dashboard`);
-    return parse<Record<string, unknown>>(res);
-  },
+  getDashboard: async (childId: string) =>
+    unwrapData<Record<string, unknown>>(
+      await hcApi.api.profiles[':id'].dashboard.$get({
+        param: { id: childId },
+      }),
+    ),
 
-  getLevels: async (childId: string, track?: string) => {
-    const q = track ? `?track=${track}` : '';
-    const res = await fetch(`${BASE}/api/profiles/${childId}/levels${q}`);
-    return parse<Array<Record<string, unknown>>>(res);
-  },
+  /** Preferensi perangkat (singleton) — tidak memerlukan profil anak. */
+  getDevicePreferences: async () =>
+    unwrapData<DevicePreferences>(await hcApi.api.device.preferences.$get()),
 
-  getLevelDetail: async (childId: string, levelId: string) => {
-    const res = await fetch(
-      `${BASE}/api/profiles/${childId}/levels/${levelId}`,
-    );
-    return parse<Record<string, unknown>>(res);
-  },
+  getWellness: async (childId: string) =>
+    unwrapData<DevicePreferences>(
+      await hcApi.api.profiles[':id'].wellness.$get({ param: { id: childId } }),
+    ),
 
-  getActivity: async (activityId: string) => {
-    const res = await fetch(`${BASE}/api/activities/${activityId}`);
-    return parse<{
+  getStickers: async (childId: string) =>
+    unwrapData<
+      Array<{
+        id: string;
+        name: string;
+        imagePath: string;
+        rarity: string;
+        theme: string;
+        earnedAt: string;
+      }>
+    >(
+      await hcApi.api.profiles[':id'].stickers.$get({ param: { id: childId } }),
+    ),
+
+  getLevels: async (childId: string, track?: string) =>
+    unwrapData<Array<Record<string, unknown>>>(
+      await hcApi.api.profiles[':childId'].levels.$get({
+        param: { childId },
+        ...(track ? { query: { track } } : {}),
+      }),
+    ),
+
+  getLevelDetail: async (childId: string, levelId: string) =>
+    unwrapData<Record<string, unknown>>(
+      await hcApi.api.profiles[':childId'].levels[':levelId'].$get({
+        param: { childId, levelId },
+      }),
+    ),
+
+  getActivity: async (activityId: string) =>
+    unwrapData<{
       id: string;
       type: string;
       title: string;
@@ -71,8 +75,11 @@ export const api = {
       payload: unknown;
       voiceOverKeys: { instruksi: string };
       level: { id: string; title: string; track: string };
-    }>(res);
-  },
+    }>(
+      await hcApi.api.activities[':id'].$get({
+        param: { id: activityId },
+      }),
+    ),
 
   submitActivity: async (
     childId: string,
@@ -83,58 +90,103 @@ export const api = {
       mistakes: number;
       durationSec: number;
     },
-  ) => {
-    const res = await fetch(
-      `${BASE}/api/profiles/${childId}/activities/${activityId}/submit`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      },
-    );
-    return parse<Record<string, unknown>>(res);
-  },
+  ) =>
+    unwrapData<Record<string, unknown>>(
+      await hcApi.api.profiles[':childId'].activities[
+        ':activityId'
+      ].submit.$post({
+        param: { childId, activityId },
+        json: body,
+      }),
+    ),
 
   setupPin: async (body: {
     pin: string;
     recoveryQuestion: string;
     recoveryAnswer: string;
-  }) => {
-    const res = await fetch(`${BASE}/api/parent/setup-pin`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    });
-    return parse<{ ok: true; sessionToken: string; expiresAt: string }>(res);
-  },
+  }) =>
+    unwrapData<{ ok: true; sessionToken: string; expiresAt: string }>(
+      await hcApi.api.parent['setup-pin'].$post({
+        json: body,
+      }),
+    ),
 
-  verifyPin: async (pin: string) => {
-    const res = await fetch(`${BASE}/api/parent/verify-pin`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ pin }),
-    });
-    return parse<{ sessionToken: string; expiresAt: string }>(res);
-  },
+  verifyPin: async (pin: string) =>
+    unwrapData<{ sessionToken: string; expiresAt: string }>(
+      await hcApi.api.parent['verify-pin'].$post({
+        json: { pin },
+      }),
+    ),
 
-  getParentSettings: async (token: string) => {
-    const res = await fetch(`${BASE}/api/parent/settings`, {
-      headers: { 'X-Parent-Session': token },
-    });
-    return parse<Record<string, unknown>>(res);
-  },
+  getParentSettings: async (token: string) =>
+    unwrapData<{
+      dailyTimeCapMinutes: number;
+      breakReminderMinutes: number;
+      musicEnabled: boolean;
+      sfxEnabled: boolean;
+      reduceMotion: boolean;
+      isSuperParent: boolean;
+    }>(
+      await hcApi.api.parent.settings.$get({
+        header: { 'X-Parent-Session': token },
+      }),
+    ),
 
-  getReport: async (token: string, childId: string) => {
-    const res = await fetch(`${BASE}/api/parent/report/${childId}`, {
-      headers: { 'X-Parent-Session': token },
-    });
-    return parse<Record<string, unknown>>(res);
-  },
+  patchParentSettings: async (
+    token: string,
+    body: Partial<{
+      dailyTimeCapMinutes: number;
+      breakReminderMinutes: number;
+      musicEnabled: boolean;
+      sfxEnabled: boolean;
+      reduceMotion: boolean;
+    }>,
+  ) =>
+    unwrapData<{
+      dailyTimeCapMinutes: number;
+      breakReminderMinutes: number;
+      musicEnabled: boolean;
+      sfxEnabled: boolean;
+      reduceMotion: boolean;
+    }>(
+      await hcApi.api.parent.settings.$put({
+        header: { 'X-Parent-Session': token },
+        json: body,
+      }),
+    ),
 
-  deleteProfile: async (token: string, id: string) => {
-    return fetch(`${BASE}/api/profiles/${id}`, {
-      method: 'DELETE',
-      headers: { 'X-Parent-Session': token },
-    });
-  },
+  patchProfileAsSuperParent: async (
+    token: string,
+    id: string,
+    body: Partial<{ name: string; avatarKey: string; ageMode: 'TK' | 'SD1' }>,
+  ) =>
+    unwrapData<ProfileRow>(
+      await hcApi.api.profiles[':id'].$patch({
+        param: { id },
+        header: { 'X-Parent-Session': token },
+        json: body,
+      }),
+    ),
+
+  resetProgressAsSuperParent: async (token: string, childId: string) =>
+    unwrapData<{ ok: true }>(
+      await hcApi.api.parent.super['reset-progress'][':childId'].$post({
+        param: { childId },
+        header: { 'X-Parent-Session': token },
+      }),
+    ),
+
+  getReport: async (token: string, childId: string) =>
+    unwrapData<Record<string, unknown>>(
+      await hcApi.api.parent.report[':childId'].$get({
+        param: { childId },
+        header: { 'X-Parent-Session': token },
+      }),
+    ),
+
+  deleteProfile: async (token: string, id: string) =>
+    hcApi.api.profiles[':id'].$delete({
+      param: { id },
+      header: { 'X-Parent-Session': token },
+    }),
 };

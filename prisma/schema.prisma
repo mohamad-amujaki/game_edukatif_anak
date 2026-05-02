@@ -3,7 +3,7 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
@@ -17,8 +17,78 @@ model ParentSettings {
   musicEnabled         Boolean  @default(true)
   sfxEnabled           Boolean  @default(true)
   reduceMotion         Boolean  @default(false)
+  isSuperParent        Boolean  @default(false)
   createdAt            DateTime @default(now())
   updatedAt            DateTime @updatedAt
+}
+
+/// Akun dewasa (panel admin). Dipisah dari `ChildProfile`.
+model User {
+  id            String    @id
+  name          String
+  email         String
+  emailVerified Boolean   @default(false)
+  image         String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  role          String?
+  banned        Boolean?  @default(false)
+  banReason     String?
+  banExpires    DateTime?
+  sessions      Session[]
+  accounts      Account[]
+
+  @@unique([email])
+  @@map("user")
+}
+
+model Session {
+  id             String   @id
+  expiresAt      DateTime
+  token          String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  ipAddress      String?
+  userAgent      String?
+  userId         String
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  impersonatedBy String?
+
+  @@unique([token])
+  @@index([userId])
+  @@map("session")
+}
+
+model Account {
+  id                    String    @id
+  accountId             String
+  providerId            String
+  userId                String
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  password              String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  @@index([userId])
+  @@map("account")
+}
+
+model Verification {
+  id         String   @id
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([identifier])
+  @@map("verification")
 }
 
 model ChildProfile {
@@ -198,13 +268,19 @@ model EarnedBadge {
 }
 
 model DailyStreak {
-  id             String   @id @default(cuid())
-  childId        String   @unique
-  child          ChildProfile @relation(fields: [childId], references: [id], onDelete: Cascade)
-  currentStreak  Int      @default(0)
-  longestStreak  Int      @default(0)
-  lastPlayedDate String?
-  updatedAt      DateTime @updatedAt
+  id                     String   @id @default(cuid())
+  childId                String   @unique
+  child                  ChildProfile @relation(fields: [childId], references: [id], onDelete: Cascade)
+  currentStreak          Int      @default(0)
+  longestStreak          Int      @default(0)
+  lastPlayedDate         String?
+  /// Tanggal (YYYY-MM-DD UTC) saat `questTargetActivityIds` di-set untuk quest harian
+  questTargetDate        String?
+  /// JSON string[] — maks. 4 aktivitas unlocked yang belum selesai saat hari quest dimulai
+  questTargetActivityIds String?
+  /// Tanggal (YYYY-MM-DD UTC) bonus +15 quest harian sudah diberikan
+  questBonusDate         String?
+  updatedAt              DateTime @updatedAt
 }
 
 model PlaySession {
@@ -217,4 +293,38 @@ model PlaySession {
   dateKey     String
 
   @@index([childId, dateKey])
+}
+
+// === ditulis manual ===
+enum AuditActor {
+  ADMIN
+  SUPER_PARENT
+}
+
+model AuditLog {
+  id         String     @id @default(cuid())
+  actorType  AuditActor
+  actorId    String
+  actorEmail String?    // snapshot agar log tetap terbaca walau user dihapus
+  action     String     // "child.delete", "activity.payload.update", ...
+  entityType String
+  entityId   String
+  beforeJson String?
+  afterJson  String?
+  ipAddress  String?
+  userAgent  String?
+  createdAt  DateTime   @default(now())
+
+  @@index([entityType, entityId])
+  @@index([createdAt])
+  @@index([actorType, actorId])
+}
+
+model AdminGlobalSettings {
+  id                          String   @id @default("singleton")
+  defaultDailyTimeCapMinutes  Int      @default(30)
+  defaultBreakReminderMinutes Int      @default(20)
+  contentLockedForEdit        Boolean  @default(false)
+  updatedAt                   DateTime @updatedAt
+  updatedByUserId             String?
 }

@@ -436,3 +436,6 @@ Mengacu pada **UU PDP No. 27 Tahun 2022** Indonesia + best practice global (COPP
 - [roadmap.md](roadmap.md) — pembagian fase pengembangan
 - [PRD-feature-feedback-confetti-math-bank.md](PRD-feature-feedback-confetti-math-bank.md) — fitur lanjutan: confetti + SFX salah & bank soal matematika Level 1–3
 - [PRD-feature-literasi-question-bank.md](PRD-feature-literasi-question-bank.md) — bank soal literasi: minimal 20 kombinasi per Level 1–3 (TK & SD1)
+- [PRD-implementation-status.md](PRD-implementation-status.md) — checklist status implementasi vs PRD & roadmap (hidup, perlu diperbarui tiap rilis)
+- [PRD-recommended-backlog-levels-4-10.md](PRD-recommended-backlog-levels-4-10.md) — backlog fitur yang disarankan & ekspansi **Level 4–10** (Literasi & Matematika, TK & SD1)
+- [PRD-feature-admin-panel.md](PRD-feature-admin-panel.md) — panel admin (manajemen pengguna, konten, bank soal, analytics, audit log, import/export) dengan otentikasi **better-auth + admin plugin**; dua peran: admin internal (email+password) & super-parent (PIN)

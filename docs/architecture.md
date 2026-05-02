@@ -43,9 +43,9 @@ flowchart LR
 
 ### Catatan
 
-- **Single-app architecture**: TanStack Start meng-host SSR React + static asset, dengan Hono di-mount sebagai sub-router pada path `/api/*`. Tidak perlu split FE & BE menjadi dua proses.
-- **SQLite single-file**: cocok untuk MVP (single-device deployment). Path file DB ditentukan via env `DATABASE_URL=file:./data/app.db`.
-- **Service Worker**: hanya aktif setelah `npm run build` + production deploy. Saat dev, PWA dimatikan untuk menghindari cache nyangkut.
+- **Implementasi saat ini**: proses dev memakai **Vite + Hono terpisah** (proxy `/api` → port API); bukan monolith TanStack Start seperti pada diagram. Diagram di atas menggambarkan **target / alternatif** integrasi SSR.
+- **SQLite single-file**: cocok untuk MVP (single-device deployment). Path file DB mengikuti `DATABASE_URL` di `.env` / Prisma (mis. `file:./dev.db`).
+- **Service Worker / PWA**: belum menjadi bagian inti alur dev di repo ini; setelah `pnpm build` perilaku static mengikuti Vite.
 
 ---
 
@@ -159,8 +159,45 @@ game_edukatif_anak/
 ### Alasan struktur
 
 - **`features/` per domain**: bukan per type (components/, pages/), supaya kode yang related (UI + logic mini-game) berada di satu folder. Lebih maintainable saat tim besar.
-- **`server/` di dalam `src/`**: mempermudah share types & Zod schema antara FE & BE.
+- **`server/` di root repo**: backend Hono terpisah dari bundle Vite; share tipe ke frontend lewat `import type` + alias `@server` (bukan import runtime).
 - **`hooks/` & `state/` terpisah**: hooks adalah "perilaku React-y", state adalah "data global" (Jotai atoms).
+
+### Backend & API client (implementasi aktual)
+
+Struktur pohon di atas sebagian masih **target**; berikut yang ada di repositori sekarang untuk Hono dan klien API.
+
+**Proses development:** `pnpm dev` menjalankan **dua proses** — API Hono (default port 3000, `server/index.ts`) dan Vite (`vite.config.ts` mem-proxy `/api` ke API). Permintaan browser ke `http://localhost:5173/api/...` diteruskan ke backend.
+
+**Layout `server/` (ringkas):**
+
+```
+server/
+├─ index.ts                 # @hono/node-server → app.fetch
+├─ app.ts                   # root Hono: CORS, prettyJSON, mount admin + web, export AppType, better-auth
+├─ admin.ts                 # /api/admin/* (panel admin, RBAC)
+├─ auth.ts                  # better-auth
+├─ schemas.ts, schemas.admin.ts
+├─ routes/web/
+│  ├─ index.ts              # menggabungkan sub-app
+│  ├─ shared.ts             # jsonErr, parentGuard
+│  ├─ profiles-crud.ts      # /api/health, profil anak, reset progres (super-parent)
+│  ├─ gameplay.ts           # dashboard, level, aktivitas, submit
+│  └─ parent-area.ts        # PIN, settings orang tua, laporan
+├─ services/                # dashboard, submit-activity, mastery, admin-analytics, …
+└─ db.ts, audit.ts, pin.ts, parent-session.ts, …
+```
+
+**Hono RPC (frontend):** `export type AppType = typeof api` di `server/app.ts` diposisikan **setelah** mount route admin & web, **sebelum** `api.on(['POST','GET'], '/api/auth/*', …)`. Wildcard better-auth harus **tidak** ikut ke snapshot tipe agar klien `hc<AppType>()` tetap masuk akal. Klien: `src/lib/hono-client.ts` (`hc`, `unwrapData` untuk respons `{ data: T }`), pembungkus domain `src/api.ts` dan `src/api-admin.ts`. Alias `@server` di `tsconfig.json` + `vite.config.ts` mendukung `import type { AppType } from '@server/app'` tanpa mengimpor runtime server ke bundle.
+
+**Keterbatasan tipe:** inferensi chain `hc<AppType>()` pada gabungan router besar sering jatuh ke `unknown` di TypeScript; satu assertion terpusat di `hono-client.ts` (dengan komentar) — jangan menambah duplikasi path string di luar `api.ts` / `api-admin.ts`.
+
+**Troubleshooting singkat**
+
+| Gejala | Periksa |
+| --- | --- |
+| Cookie admin tidak terkirim | Request same-origin lewat Vite; `credentials: 'include'` sudah di `hono-client` |
+| CORS error | Origin browser harus masuk daftar `cors()` di `server/app.ts` |
+| `AppType` / import `@server/app` | Pastikan alias `@server` di Vite selaras dengan `tsconfig` paths |
 
 ---
 

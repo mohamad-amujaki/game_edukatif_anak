@@ -149,9 +149,9 @@ Jika satu JSON aktivitas menjadi terlalu besar untuk kenyamanan maintainer, **di
 
 ## 13. Lampiran — checklist implementasi engineer
 
-- [ ] Sepakati Opsi A atau B dan dokumentasikan di changelog seed  
-- [ ] Modul generator / perluasan seed untuk `tk-literasi-1` … `sd1-literasi-3`  
-- [ ] Perluasan `emoji-map` / kunci gambar jika ada benda baru  
-- [ ] `pickSessionQuestions` (atau setara) untuk komponen literasi yang memakai bank panjang  
+- [x] **Opsi A** (≥20 per level per mode) — diimplementasi di `prisma/literasi-banks.ts` + seed.  
+- [x] Modul `literasi-banks` + seed untuk `tk-literasi-1` … `sd1-literasi-3`  
+- [x] Perluasan `emoji-map` untuk kunci baru (mis. `daun`, `eskrim`, `perahu`, `pelangi`, …)  
+- [x] `pickSessionQuestions` di `HurufGambar`, `SusunSukuKata`, `BacaKalimat` (`ActivityPlayer.tsx`)  
 - [ ] (Opsional) Tes atau skrip validasi jumlah entri ≥ 20 per level  
 - [ ] UAT singkat 2–3 anak: durasi sesi dan kejelasan instruksi  

@@ -1,4 +1,13 @@
 import { PrismaClient } from '@prisma/client';
+import { extendedLevelsSeed } from './extended-levels-seed';
+import {
+  sd1Literasi1SusunQuestions,
+  sd1Literasi2SusunQuestions,
+  sd1Literasi3BacaQuestions,
+  tkLiterasi1Pairs,
+  tkLiterasi2SusunQuestions,
+  tkLiterasi3SusunQuestions,
+} from './literasi-banks';
 import {
   sd1Math1TambahQuestions,
   sd1Math2TambahQuestions,
@@ -174,7 +183,7 @@ async function main() {
       track: 'literasi',
       ageMode: 'TK',
       order: 1,
-      title: 'Mengenal Huruf A–E',
+      title: 'Mengenal Huruf dan Gambar',
       description: 'Cocokkan huruf dengan gambar.',
       iconKey: 'abc',
       activity: {
@@ -183,11 +192,7 @@ async function main() {
         title: 'Huruf Ajaib',
         payload: {
           instruction: 'Cocokkan huruf dengan gambarnya!',
-          pairs: [
-            { huruf: 'A', gambarKey: 'apel', gambarLabel: 'Apel' },
-            { huruf: 'B', gambarKey: 'bola', gambarLabel: 'Bola' },
-            { huruf: 'C', gambarKey: 'cangkir', gambarLabel: 'Cangkir' },
-          ],
+          pairs: tkLiterasi1Pairs(),
           shuffle: true,
         },
       },
@@ -206,20 +211,7 @@ async function main() {
         title: 'Susun Kata',
         payload: {
           instruction: 'Susun suku kata jadi nama benda!',
-          questions: [
-            {
-              gambarKey: 'bola',
-              gambarLabel: 'Bola',
-              targetKata: 'BO LA',
-              sukuKataKepingan: ['BO', 'LA', 'MA', 'PA'],
-            },
-            {
-              gambarKey: 'rumah',
-              gambarLabel: 'Rumah',
-              targetKata: 'RU MAH',
-              sukuKataKepingan: ['RU', 'MAH', 'BU', 'SAH'],
-            },
-          ],
+          questions: tkLiterasi2SusunQuestions(),
         },
       },
     },
@@ -237,20 +229,7 @@ async function main() {
         title: 'Susun di Rumah',
         payload: {
           instruction: 'Susun suku kata!',
-          questions: [
-            {
-              gambarKey: 'meja',
-              gambarLabel: 'Meja',
-              targetKata: 'ME JA',
-              sukuKataKepingan: ['ME', 'JA', 'KA', 'LA'],
-            },
-            {
-              gambarKey: 'kursi',
-              gambarLabel: 'Kursi',
-              targetKata: 'KUR SI',
-              sukuKataKepingan: ['KUR', 'SI', 'LU', 'MI'],
-            },
-          ],
+          questions: tkLiterasi3SusunQuestions(),
         },
       },
     },
@@ -322,20 +301,7 @@ async function main() {
         title: 'Susun Kata',
         payload: {
           instruction: 'Susun suku kata!',
-          questions: [
-            {
-              gambarKey: 'mobil',
-              gambarLabel: 'Mobil',
-              targetKata: 'MO BIL',
-              sukuKataKepingan: ['MO', 'BIL', 'LA', 'TI'],
-            },
-            {
-              gambarKey: 'sekolah',
-              gambarLabel: 'Sekolah',
-              targetKata: 'SE KO LAH',
-              sukuKataKepingan: ['SE', 'KO', 'LAH', 'PA'],
-            },
-          ],
+          questions: sd1Literasi1SusunQuestions(),
         },
       },
     },
@@ -353,14 +319,7 @@ async function main() {
         title: 'Susun Kata Panjang',
         payload: {
           instruction: 'Susun menjadi kata!',
-          questions: [
-            {
-              gambarKey: 'ayam',
-              gambarLabel: 'Ayam',
-              targetKata: 'A YAM',
-              sukuKataKepingan: ['A', 'YAM', 'UM', 'EK'],
-            },
-          ],
+          questions: sd1Literasi2SusunQuestions(),
         },
       },
     },
@@ -378,20 +337,7 @@ async function main() {
         title: 'Baca dan Pilih',
         payload: {
           instruction: 'Baca kalimat lalu pilih gambar yang benar!',
-          questions: [
-            {
-              kalimat: 'Adik makan pisang',
-              audioKey: '',
-              gambarBenar: 'pisang',
-              gambarSalah: ['tidur', 'main'],
-            },
-            {
-              kalimat: 'Ayam di kebun',
-              audioKey: '',
-              gambarBenar: 'kebun',
-              gambarSalah: ['kandang', 'rumah'],
-            },
-          ],
+          questions: sd1Literasi3BacaQuestions(),
         },
       },
     },
@@ -449,6 +395,7 @@ async function main() {
         },
       },
     },
+    ...extendedLevelsSeed(),
   ];
 
   for (const L of levels) {
