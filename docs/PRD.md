@@ -435,3 +435,4 @@ Mengacu pada **UU PDP No. 27 Tahun 2022** Indonesia + best practice global (COPP
 - [design-system.md](design-system.md) — visual & audio guideline
 - [roadmap.md](roadmap.md) — pembagian fase pengembangan
 - [PRD-feature-feedback-confetti-math-bank.md](PRD-feature-feedback-confetti-math-bank.md) — fitur lanjutan: confetti + SFX salah & bank soal matematika Level 1–3
+- [PRD-feature-literasi-question-bank.md](PRD-feature-literasi-question-bank.md) — bank soal literasi: minimal 20 kombinasi per Level 1–3 (TK & SD1)
