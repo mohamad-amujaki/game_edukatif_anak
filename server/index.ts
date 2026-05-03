@@ -2,14 +2,23 @@ import './boot-env';
 import { serve } from '@hono/node-server';
 import { app } from './app';
 
-/** Railway dan banyak PaaS menyetel `PORT`; lokal bisa pakai `API_PORT`. */
-const port = Number(process.env.PORT ?? process.env.API_PORT) || 3000;
+/** Fly/Railway menyetel `PORT` ke `internal_port` (8080). Fallback prod → 8080, dev → 3000. */
+function listenPort(): number {
+  const raw = process.env.PORT ?? process.env.API_PORT;
+  const n = raw !== undefined && raw !== '' ? Number(raw) : Number.NaN;
+  if (Number.isFinite(n) && n > 0) return n;
+  return process.env.NODE_ENV === 'production' ? 8080 : 3000;
+}
+
+const port = listenPort();
 
 const server = serve(
-  /** `0.0.0.0` diperlukan container (Fly.io, dll.); lokal tetap bisa diakses dari host. */
+  /** `0.0.0.0` wajib agar fly-proxy / Docker bisa mencapai proses (bukan hanya localhost). */
   { fetch: app.fetch, port, hostname: '0.0.0.0' },
   (info) => {
-    console.log(`API listening on :${info.port}`);
+    console.log(
+      `[api] listening on http://0.0.0.0:${info.port} (PORT=${process.env.PORT ?? 'unset'})`,
+    );
   },
 );
 
