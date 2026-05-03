@@ -9,6 +9,37 @@ import { jsonErr } from './shared';
 /** Dashboard, level, aktivitas, submit skor. */
 export const gameplayApp = new Hono();
 
+/** Satu sumber default — dipakai saat baris belum ada atau DB error (tanpa 500). */
+function devicePreferencesFromRow(
+  s: {
+    dailyTimeCapMinutes: number;
+    breakReminderMinutes: number;
+    sfxEnabled: boolean;
+    musicEnabled: boolean;
+    reduceMotion: boolean;
+  } | null,
+) {
+  return {
+    dailyTimeCapMinutes: s?.dailyTimeCapMinutes ?? 30,
+    breakReminderMinutes: s?.breakReminderMinutes ?? 15,
+    sfxEnabled: s?.sfxEnabled ?? true,
+    musicEnabled: s?.musicEnabled ?? true,
+    reduceMotion: s?.reduceMotion ?? false,
+  };
+}
+
+async function loadSingletonDevicePreferences() {
+  try {
+    const s = await prisma.parentSettings.findUnique({
+      where: { id: 'singleton' },
+    });
+    return devicePreferencesFromRow(s);
+  } catch (err) {
+    console.error('[gameplay] ParentSettings findUnique failed:', err);
+    return devicePreferencesFromRow(null);
+  }
+}
+
 gameplayApp.get('/api/profiles/:id/dashboard', async (c) => {
   const id = c.req.param('id');
   const dash = await buildDashboard(id);
@@ -18,18 +49,13 @@ gameplayApp.get('/api/profiles/:id/dashboard', async (c) => {
 
 /** Preferensi perangkat (singleton) — dipakai anak & sinkron ke feedback permainan. */
 gameplayApp.get('/api/device/preferences', async (c) => {
-  const s = await prisma.parentSettings.findUnique({
-    where: { id: 'singleton' },
-  });
-  return c.json({
-    data: {
-      dailyTimeCapMinutes: s?.dailyTimeCapMinutes ?? 30,
-      breakReminderMinutes: s?.breakReminderMinutes ?? 15,
-      sfxEnabled: s?.sfxEnabled ?? true,
-      musicEnabled: s?.musicEnabled ?? true,
-      reduceMotion: s?.reduceMotion ?? false,
-    },
-  });
+  try {
+    const data = await loadSingletonDevicePreferences();
+    return c.json({ data });
+  } catch (err) {
+    console.error('[api/device/preferences]', err);
+    return c.json({ data: devicePreferencesFromRow(null) });
+  }
 });
 
 /** Batas bermain & reminder (validasi profil anak + singleton). */
@@ -39,18 +65,8 @@ gameplayApp.get('/api/profiles/:id/wellness', async (c) => {
     where: { id: childId },
   });
   if (!child) return jsonErr('NOT_FOUND', 'Profil tidak ada', 404);
-  const s = await prisma.parentSettings.findUnique({
-    where: { id: 'singleton' },
-  });
-  return c.json({
-    data: {
-      dailyTimeCapMinutes: s?.dailyTimeCapMinutes ?? 30,
-      breakReminderMinutes: s?.breakReminderMinutes ?? 15,
-      sfxEnabled: s?.sfxEnabled ?? true,
-      musicEnabled: s?.musicEnabled ?? true,
-      reduceMotion: s?.reduceMotion ?? false,
-    },
-  });
+  const data = await loadSingletonDevicePreferences();
+  return c.json({ data });
 });
 
 gameplayApp.get('/api/profiles/:id/stickers', async (c) => {

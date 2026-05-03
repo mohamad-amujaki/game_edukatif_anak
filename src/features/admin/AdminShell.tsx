@@ -1,5 +1,6 @@
 import { Button } from '@/components/ui/Button';
 import { authClient } from '@/lib/auth-client';
+import { BRAND_ADMIN } from '@/lib/brand';
 import { Link, Outlet, useNavigate } from '@tanstack/react-router';
 
 export function AdminShell() {
@@ -30,7 +31,7 @@ export function AdminShell() {
             to="/admin"
             className="text-xl font-bold text-primary-600 block"
           >
-            Bimo Admin
+            {BRAND_ADMIN}
           </Link>
           <p className="text-xs text-neutral-500 mt-1 uppercase tracking-wider">
             {user.role?.replace('_', ' ')}
@@ -149,7 +150,7 @@ export function AdminShell() {
       <main className="min-w-0 flex-1 overflow-auto bg-neutral-50">
         <header className="sticky top-0 z-10 flex items-center justify-between border-b border-neutral-200 bg-white/80 px-4 py-4 backdrop-blur md:hidden">
           <Link to="/admin" className="font-bold text-primary-600">
-            Bimo Admin
+            {BRAND_ADMIN}
           </Link>
           <button type="button" className="p-2">
             Menu

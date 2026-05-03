@@ -1,4 +1,5 @@
 import { Button } from '@/components/ui/Button';
+import { BRAND_APP } from '@/lib/brand';
 import { useNavigate } from '@tanstack/react-router';
 import { useState } from 'react';
 
@@ -29,7 +30,7 @@ export function OnboardingFlowPage({ childId }: Props) {
       {step === 0 ? (
         <div className="rounded-3xl bg-primary-50 p-6 text-center shadow-inner">
           <p className="font-[family-name:var(--font-display)] text-2xl font-bold text-primary-700">
-            Selamat datang di Bimo Belajar!
+            Selamat datang di {BRAND_APP}!
           </p>
           <p className="mt-3 text-neutral-700">
             Kamu akan bermain sambil belajar huruf, kata, dan berhitung. Ikuti

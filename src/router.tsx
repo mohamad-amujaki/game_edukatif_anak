@@ -20,6 +20,7 @@ import { OnboardingFlowPage } from '@/features/onboarding/OnboardingFlowPage';
 import { SuperParentPage } from '@/features/parent/SuperParentPage';
 import { PlayWellnessOverlay } from '@/features/wellness/PlayWellnessOverlay';
 import { authClient } from '@/lib/auth-client';
+import { BRAND_ADMIN, BRAND_APP } from '@/lib/brand';
 import {
   type DevicePreferences,
   applyDevicePreferencesToGameFeedback,
@@ -63,7 +64,7 @@ function AppChrome({
       className={
         variant === 'admin'
           ? 'min-h-dvh w-full max-w-none'
-          : 'mx-auto min-h-dvh max-w-lg pb-10 w-full'
+          : 'mx-auto min-h-dvh w-full max-w-7xl px-4 pb-10 sm:px-6 lg:px-8'
       }
     >
       {children}
@@ -80,12 +81,12 @@ function RootLayout() {
       <GameFeedbackSync />
       <AppChrome variant={isAdmin ? 'admin' : 'kids'}>
         {!isAdmin ? (
-          <header className="sticky top-0 z-10 flex items-center justify-between bg-[color:var(--color-canvas)]/95 px-4 py-3 backdrop-blur">
+          <header className="sticky top-0 z-10 flex items-center justify-between bg-[color:var(--color-canvas)]/95 py-3 backdrop-blur">
             <Link
               to="/"
               className="font-[family-name:var(--font-display)] text-xl font-bold text-[var(--color-primary-600)]"
             >
-              Bimo Belajar
+              {BRAND_APP}
             </Link>
             <Link
               to="/parent"
@@ -132,29 +133,10 @@ const indexRoute = createRoute({
 function HomePage() {
   const navigate = useNavigate();
   const [, setLast] = useAtom(lastChildIdAtom);
-  const [profiles, setProfiles] = useState<
-    Array<{ id: string; name: string; avatarKey: string; ageMode: string }>
-  >([]);
   const [name, setName] = useState('');
   const [avatarKey, setAvatarKey] = useState(AVATARS[0]);
   const [ageMode, setAgeMode] = useState<'TK' | 'SD1'>('TK');
-  const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
-
-  useEffect(() => {
-    setLoading(true);
-    api
-      .getProfiles()
-      .then(setProfiles)
-      .catch((e: unknown) =>
-        setErr(
-          e instanceof Error
-            ? e.message || 'Gagal memuat profil'
-            : 'Gagal memuat profil',
-        ),
-      )
-      .finally(() => setLoading(false));
-  }, []);
 
   const create = async () => {
     setErr(null);
@@ -166,7 +148,6 @@ function HomePage() {
       });
       setLast(p.id);
       setName('');
-      setProfiles(await api.getProfiles());
       navigate({ to: '/p/$childId', params: { childId: p.id } });
     } catch (e) {
       setErr(e instanceof Error ? e.message : 'Gagal membuat profil');
@@ -174,40 +155,17 @@ function HomePage() {
   };
 
   return (
-    <div className="space-y-6 px-4">
-      <div className="rounded-3xl bg-primary-100 p-6 text-center">
-        <p className="font-[family-name:var(--font-display)] text-2xl font-bold text-[var(--color-primary-600)]">
-          Halo!
+    <div className="mx-auto w-full max-w-2xl space-y-6">
+      <div className="rounded-3xl bg-gradient-to-br from-primary-100 to-amber-50 p-6 text-center sm:p-8">
+        <p className="font-[family-name:var(--font-display)] text-2xl font-bold text-[var(--color-primary-600)] sm:text-3xl">
+          Mulai petualangan belajar
         </p>
-        <p className="mt-2 text-lg">
-          Pilih profil atau buat baru untuk mulai belajar.
+        <p className="mt-2 text-balance text-lg text-neutral-700 sm:text-xl">
+          Isi data di bawah—kami siapkan permainan yang pas untuk usia anak.
         </p>
       </div>
 
-      {loading ? (
-        <p className="text-center">Memuat…</p>
-      ) : (
-        <div className="grid gap-3">
-          {profiles.map((p) => (
-            <a
-              key={p.id}
-              href={`/p/${p.id}`}
-              onClick={() => setLast(p.id)}
-              className="flex items-center gap-4 rounded-2xl bg-white p-4 shadow-md ring-1 ring-black/5"
-            >
-              <span className="text-4xl">{emojiAvatar(p.avatarKey)}</span>
-              <div>
-                <p className="text-xl font-bold">{p.name}</p>
-                <p className="text-sm text-neutral-600">
-                  {p.ageMode === 'TK' ? 'TK' : 'SD kelas 1'}
-                </p>
-              </div>
-            </a>
-          ))}
-        </div>
-      )}
-
-      <div className="rounded-3xl bg-white p-5 shadow-lg ring-1 ring-black/5">
+      <div className="rounded-3xl bg-white p-5 shadow-lg ring-1 ring-black/5 sm:p-6">
         <p className="mb-3 font-semibold">Buat profil baru</p>
         <label htmlFor="child-name" className="block text-sm font-medium">
           Nama panggilan
@@ -1024,7 +982,7 @@ function AdminDashboardPage() {
         .
       </p>
       <p className="italic text-neutral-500">
-        Selamat datang di Panel Kontrol Bimo Belajar.
+        Selamat datang di {BRAND_ADMIN}.
       </p>
     </div>
   );

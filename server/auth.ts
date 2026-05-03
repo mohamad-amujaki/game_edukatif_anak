@@ -2,10 +2,6 @@ import { APIError, betterAuth } from 'better-auth';
 import { prismaAdapter } from 'better-auth/adapters/prisma';
 import { admin, createAccessControl } from 'better-auth/plugins';
 import { allowedBrowserOrigins } from './allowed-origins';
-import {
-  betterAuthAllowedHosts,
-  betterAuthBaseUrlFallback,
-} from './better-auth-base-url';
 import { prisma } from './db';
 
 function authSecret(): string {
@@ -67,15 +63,12 @@ export const auth = betterAuth({
   database: prismaAdapter(prisma, { provider: 'postgresql' }),
   secret: authSecret(),
   /**
-   * Dynamic base URL: ambil host dari request (`x-forwarded-host` saat di belakang proxy).
-   * Deploy Netlify → Fly: browser memanggil `https://….netlify.app/api/auth/*`; Fly harus
-   * mengenali host Netlify agar cookie/sesi tidak “menempel” ke `*.fly.dev`.
-   * Fallback: `BETTER_AUTH_URL` atau localhost dev.
+   * Di Fly + Netlify proxy: **`BETTER_AUTH_URL` harus URL yang dipakai browser**, mis.
+   * `https://game-edukatif-anak.netlify.app` (tanpa slash akhir). Konfigurasi `baseURL`
+   * dinamis (allowedHosts) pernah memunculkan 500 di production; string statis + header
+   * `x-forwarded-host` yang di-inject di `auth-proxy-headers.ts` lebih stabil.
    */
-  baseURL: {
-    allowedHosts: betterAuthAllowedHosts(),
-    fallback: betterAuthBaseUrlFallback(),
-  },
+  baseURL: process.env.BETTER_AUTH_URL?.trim() || 'http://localhost:5173',
   emailAndPassword: {
     enabled: true,
     /** Setelah daftar admin pertama, cookie sesi langsung aktif (tanpa login kedua). */

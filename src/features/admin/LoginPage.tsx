@@ -1,5 +1,6 @@
 import { Button } from '@/components/ui/Button';
 import { authClient } from '@/lib/auth-client';
+import { BRAND_ADMIN } from '@/lib/brand';
 import { Link, useNavigate } from '@tanstack/react-router';
 import { useState } from 'react';
 
@@ -41,7 +42,7 @@ export function LoginPage() {
       <div className="w-full max-w-md bg-white rounded-3xl shadow-xl p-8 border border-neutral-200">
         <div className="text-center mb-8">
           <h1 className="text-3xl font-bold text-primary-600 font-[family-name:var(--font-display)]">
-            Bimo Admin
+            {BRAND_ADMIN}
           </h1>
           <p className="text-neutral-600 mt-2">
             Masuk ke panel kontrol internal

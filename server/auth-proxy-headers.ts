@@ -35,18 +35,12 @@ export function injectForwardedHostFromOrigin(req: Request): Request {
       'x-forwarded-proto',
       u.protocol === 'https:' ? 'https' : 'http',
     );
-    const init: RequestInit = {
-      method: req.method,
-      headers,
-      redirect: req.redirect,
-      referrer: req.referrer,
-      signal: req.signal,
-    };
-    if (req.body) {
-      init.body = req.body;
-      (init as RequestInit & { duplex: 'half' }).duplex = 'half';
-    }
-    return new Request(req.url, init);
+    /**
+     * Pakai `new Request(req, { headers })` — Undici/Node menyalin body stream dengan benar.
+     * Membuat `new Request(url, { body, duplex })` dari body mentah sering memicu 500 pada
+     * POST `/api/auth/sign-in/email` di belakang proxy.
+     */
+    return new Request(req, { headers });
   } catch {
     return req;
   }
