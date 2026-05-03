@@ -62,7 +62,8 @@ const roleAnalyst = ac.newRole({
 export const auth = betterAuth({
   database: prismaAdapter(prisma, { provider: 'postgresql' }),
   secret: authSecret(),
-  baseURL: process.env.BETTER_AUTH_URL ?? 'http://localhost:3000',
+  /** Dev default mengikuti origin Vite (`pnpm dev`); override via BETTER_AUTH_URL. */
+  baseURL: process.env.BETTER_AUTH_URL ?? 'http://localhost:5173',
   emailAndPassword: {
     enabled: true,
     autoSignIn: false,

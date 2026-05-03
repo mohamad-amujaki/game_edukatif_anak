@@ -7,6 +7,7 @@ on:
 
 env:
   DATABASE_URL: postgresql://postgres:postgres@localhost:5432/ci
+  DATABASE_DIRECT_URL: postgresql://postgres:postgres@localhost:5432/ci
 
 jobs:
   ci:

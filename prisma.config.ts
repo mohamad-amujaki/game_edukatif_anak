@@ -6,9 +6,17 @@ import { defineConfig } from 'prisma/config';
 const PLACEHOLDER_DATASOURCE_URL =
   'postgresql://build:build@127.0.0.1:5432/prisma_config_placeholder?schema=public';
 
-function datasourceUrl(): string {
-  const u = process.env.DATABASE_URL?.trim();
-  return u && u.length > 0 ? u : PLACEHOLDER_DATASOURCE_URL;
+/**
+ * URL untuk Prisma CLI (`migrate deploy`, dll.).
+ * Prisma Postgres: pakai **Direct** di `DATABASE_DIRECT_URL`; URL **Pooled** (`pooled.db.prisma.io`)
+ * sering memunculkan P1001 dari Fly / CI saat migrasi.
+ */
+function datasourceUrlForCli(): string {
+  const direct = process.env.DATABASE_DIRECT_URL?.trim();
+  const primary = process.env.DATABASE_URL?.trim();
+  if (direct && direct.length > 0) return direct;
+  if (primary && primary.length > 0) return primary;
+  return PLACEHOLDER_DATASOURCE_URL;
 }
 
 export default defineConfig({
@@ -18,6 +26,6 @@ export default defineConfig({
     seed: 'tsx prisma/seed.ts',
   },
   datasource: {
-    url: datasourceUrl(),
+    url: datasourceUrlForCli(),
   },
 });

@@ -71,17 +71,24 @@ Prasyarat: [Fly CLI](https://fly.io/docs/hands-on/install-flyctl/) terpasang dan
 
    Sesuaikan nama app dan region jika diminta. Field **`app`** di [`fly.toml`](fly.toml) harus sama dengan app Fly Anda.
 
-2. **Secrets** (sama seperti backend lain — tidak di-commit):
+2. **Secrets wajib** (tanpa ini proses sering **crash / restart** di Fly; dicek di [`server/boot-env.ts`](server/boot-env.ts)):
 
    ```bash
    fly secrets set \
-     DATABASE_URL="postgresql://..." \
-     BETTER_AUTH_URL="https://<app>.fly.dev" \
-     BETTER_AUTH_SECRET="<minimal-32-karakter>" \
-     PIN_HASH_PEPPER="<acak-kuat>"
+     DATABASE_URL="postgres://...@pooled.db.prisma.io/..." \
+     DATABASE_DIRECT_URL="postgres://...@db.prisma.io/..." \
+     BETTER_AUTH_URL="https://game-edukatif-anak.netlify.app" \
+     BETTER_AUTH_SECRET="<minimal-32-karakter-acak>" \
+     PIN_HASH_PEPPER="<acak-kuat-terpisah>"
    ```
 
-   **`BETTER_AUTH_URL`** harus persis URL publik Fly tempat `/api/auth/*` diakses (biasanya `https://<nama-app>.fly.dev`). Tambahkan **`CORS_ORIGINS`** jika perlu domain tambahan (pisahkan koma).
+   - **`DATABASE_URL`**: dari [Prisma Console](https://console.prisma.io/) → database Anda → **Pooled connection** (untuk runtime Node / `@prisma/client`).
+   - **`DATABASE_DIRECT_URL`**: string **Direct connection** yang sama dari dashboard (untuk `prisma migrate deploy` / [`prisma.config.ts`](prisma.config.ts)). Tanpa ini, URL pooled sering memicu **P1001** dari Fly. Salin persis dari Console; host biasanya beda dari pooled (`db.prisma.io` vs `pooled.db.prisma.io`).
+   - **`BETTER_AUTH_URL`**: URL yang dipakai **browser** untuk memanggil auth (bukan hanya `*.fly.dev`). Jika frontend di Netlify memakai proxy `/api` ke Fly, isi **URL Netlify** (seperti contoh). Jika klien memanggil API langsung ke Fly, isi `https://<nama-app>.fly.dev`.
+   - **`BETTER_AUTH_SECRET`**: panjang **≥ 32** karakter.
+   - Cek terpasang: `fly secrets list -a <app>`.
+
+   Opsional: **`CORS_ORIGINS`** jika domain tambahan (pisahkan koma).
 
 3. **Deploy:**
 

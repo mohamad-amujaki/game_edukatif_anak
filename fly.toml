@@ -1,4 +1,5 @@
-# fly.toml — lihat README "Deploy API (Fly.io)"
+# fly.toml — lihat README "Deploy API (Fly.io)" (secrets wajib: DATABASE_URL, BETTER_AUTH_*, PIN_HASH_PEPPER).
+# Mesin sering restart jika env produksi kurang — cek: fly logs; set secrets lalu fly deploy.
 #
 # See https://fly.io/docs/reference/configuration/
 
