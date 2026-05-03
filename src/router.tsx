@@ -16,6 +16,7 @@ import { AdminUsersPage } from '@/features/admin/AdminUsersPage';
 import { LoginPage as AdminLoginPage } from '@/features/admin/LoginPage';
 import { SignupPage as AdminSignupPage } from '@/features/admin/SignupPage';
 import { StickerAlbumPage } from '@/features/child/StickerAlbumPage';
+import { HomeLanding } from '@/features/home/HomeLanding';
 import { OnboardingFlowPage } from '@/features/onboarding/OnboardingFlowPage';
 import { SuperParentPage } from '@/features/parent/SuperParentPage';
 import { PlayWellnessOverlay } from '@/features/wellness/PlayWellnessOverlay';
@@ -25,7 +26,7 @@ import {
   type DevicePreferences,
   applyDevicePreferencesToGameFeedback,
 } from '@/lib/game-feedback-sync';
-import { lastChildIdAtom, parentSessionAtom } from '@/state/atoms';
+import { parentSessionAtom } from '@/state/atoms';
 import {
   Link,
   Outlet,
@@ -39,18 +40,7 @@ import {
 } from '@tanstack/react-router';
 import { Provider as JotaiProvider } from 'jotai';
 import { useAtom } from 'jotai/react';
-import { useEffect, useState } from 'react';
-
-const AVATARS = [
-  'panda',
-  'cat',
-  'dog',
-  'rabbit',
-  'lion',
-  'frog',
-  'bear',
-  'fox',
-];
+import { useCallback, useEffect, useState } from 'react';
 
 function AppChrome({
   children,
@@ -127,95 +117,8 @@ const rootRoute = createRootRoute({
 const indexRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/',
-  component: HomePage,
+  component: HomeLanding,
 });
-
-function HomePage() {
-  const navigate = useNavigate();
-  const [, setLast] = useAtom(lastChildIdAtom);
-  const [name, setName] = useState('');
-  const [avatarKey, setAvatarKey] = useState(AVATARS[0]);
-  const [ageMode, setAgeMode] = useState<'TK' | 'SD1'>('TK');
-  const [err, setErr] = useState<string | null>(null);
-
-  const create = async () => {
-    setErr(null);
-    try {
-      const p = await api.createProfile({
-        name: name.trim() || 'Anak',
-        avatarKey,
-        ageMode,
-      });
-      setLast(p.id);
-      setName('');
-      navigate({ to: '/p/$childId', params: { childId: p.id } });
-    } catch (e) {
-      setErr(e instanceof Error ? e.message : 'Gagal membuat profil');
-    }
-  };
-
-  return (
-    <div className="mx-auto w-full max-w-2xl space-y-6">
-      <div className="rounded-3xl bg-gradient-to-br from-primary-100 to-amber-50 p-6 text-center sm:p-8">
-        <p className="font-[family-name:var(--font-display)] text-2xl font-bold text-[var(--color-primary-600)] sm:text-3xl">
-          Mulai petualangan belajar
-        </p>
-        <p className="mt-2 text-balance text-lg text-neutral-700 sm:text-xl">
-          Isi data di bawah—kami siapkan permainan yang pas untuk usia anak.
-        </p>
-      </div>
-
-      <div className="rounded-3xl bg-white p-5 shadow-lg ring-1 ring-black/5 sm:p-6">
-        <p className="mb-3 font-semibold">Buat profil baru</p>
-        <label htmlFor="child-name" className="block text-sm font-medium">
-          Nama panggilan
-        </label>
-        <input
-          id="child-name"
-          className="mt-1 w-full rounded-xl border border-neutral-300 px-3 py-3 text-lg"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          placeholder="Contoh: Lala"
-          maxLength={20}
-        />
-        <p className="mt-3 text-sm font-medium">Avatar</p>
-        <div className="mt-2 flex flex-wrap gap-2">
-          {AVATARS.map((a) => (
-            <button
-              type="button"
-              key={a}
-              className={`rounded-xl border-2 p-2 text-3xl ${avatarKey === a ? 'border-primary-500' : 'border-transparent'}`}
-              onClick={() => setAvatarKey(a)}
-            >
-              {emojiAvatar(a)}
-            </button>
-          ))}
-        </div>
-        <p className="mt-3 text-sm font-medium">Mode</p>
-        <div className="mt-2 flex gap-2">
-          <Button
-            variant={ageMode === 'TK' ? 'primary' : 'secondary'}
-            onClick={() => setAgeMode('TK')}
-          >
-            TK (4–6 th)
-          </Button>
-          <Button
-            variant={ageMode === 'SD1' ? 'primary' : 'secondary'}
-            onClick={() => setAgeMode('SD1')}
-          >
-            SD kelas 1
-          </Button>
-        </div>
-        {err ? <p className="mt-2 text-red-600">{err}</p> : null}
-        <div className="mt-4">
-          <Button className="w-full" onClick={create}>
-            Simpan & mulai
-          </Button>
-        </div>
-      </div>
-    </div>
-  );
-}
 
 function emojiAvatar(key: string): string {
   const m: Record<string, string> = {
@@ -586,6 +489,7 @@ const parentSuperRoute = createRoute({
 function ParentPage() {
   const [session, setSession] = useAtom(parentSessionAtom);
   const [pin, setPin] = useState('');
+  const [currentPin, setCurrentPin] = useState('');
   const [profiles, setProfiles] = useState<Array<{ id: string; name: string }>>(
     [],
   );
@@ -594,6 +498,7 @@ function ParentPage() {
   const [recoverQ, setRecoverQ] = useState('Siapa nama hewan peliharaanmu?');
   const [recoverA, setRecoverA] = useState('');
   const [err, setErr] = useState<string | null>(null);
+  const [pinIsSet, setPinIsSet] = useState<boolean | null>(null);
   const [isSuperParent, setIsSuperParent] = useState(false);
   const [parentSettings, setParentSettings] = useState<{
     dailyTimeCapMinutes: number;
@@ -607,6 +512,14 @@ function ParentPage() {
   useEffect(() => {
     api.getProfiles().then(setProfiles);
   }, []);
+
+  useEffect(() => {
+    if (step !== 'gate') return;
+    api
+      .getPinStatus()
+      .then((s) => setPinIsSet(s.pinIsSet))
+      .catch(() => setPinIsSet(false));
+  }, [step]);
 
   useEffect(() => {
     if (!session) {
@@ -639,6 +552,7 @@ function ParentPage() {
       setSession(res.sessionToken);
       setStep('app');
       setPin('');
+      setCurrentPin('');
     } catch {
       setErr('PIN salah atau belum diatur. Coba setup PIN baru.');
     }
@@ -647,13 +561,23 @@ function ParentPage() {
   const setup = async () => {
     setErr(null);
     try {
-      const res = await api.setupPin({
-        pin,
-        recoveryQuestion: recoverQ,
-        recoveryAnswer: recoverA,
-      });
+      const res =
+        pinIsSet === true
+          ? await api.changePin({
+              currentPin,
+              pin,
+              recoveryQuestion: recoverQ,
+              recoveryAnswer: recoverA,
+            })
+          : await api.setupPin({
+              pin,
+              recoveryQuestion: recoverQ,
+              recoveryAnswer: recoverA,
+            });
       setSession(res.sessionToken);
       setStep('app');
+      setPin('');
+      setCurrentPin('');
     } catch (e) {
       setErr(e instanceof Error ? e.message : 'Gagal menyimpan PIN');
     }
@@ -686,9 +610,14 @@ function ParentPage() {
         <button
           type="button"
           className="w-full text-sm text-primary-600"
+          disabled={pinIsSet === null}
           onClick={() => setStep('setup')}
         >
-          Setup PIN pertama kali
+          {pinIsSet === null
+            ? 'Memuat…'
+            : pinIsSet
+              ? 'Ubah PIN'
+              : 'Setup PIN pertama kali'}
         </button>
         <a href="/" className="block text-center text-sm text-neutral-600">
           Kembali
@@ -698,13 +627,42 @@ function ParentPage() {
   }
 
   if (step === 'setup') {
+    const title = pinIsSet ? 'Ubah PIN' : 'Buat PIN';
     return (
       <div className="space-y-3 px-4">
-        <h1 className="text-2xl font-bold">Buat PIN</h1>
+        <h1 className="text-2xl font-bold">{title}</h1>
+        {pinIsSet ? (
+          <p className="text-sm text-neutral-600">
+            Masukkan PIN lalu tentukan PIN baru dan pemulihan akun.
+          </p>
+        ) : null}
+        {pinIsSet ? (
+          <>
+            <label htmlFor="parent-pin-current" className="sr-only">
+              PIN saat ini
+            </label>
+            <input
+              id="parent-pin-current"
+              inputMode="numeric"
+              autoComplete="off"
+              placeholder="PIN saat ini (4 digit)"
+              className="w-full rounded-xl border px-3 py-3 text-2xl tracking-widest"
+              maxLength={4}
+              value={currentPin}
+              onChange={(e) =>
+                setCurrentPin(e.target.value.replace(/\D/g, '').slice(0, 4))
+              }
+            />
+          </>
+        ) : null}
+        <label htmlFor="parent-pin-new" className="sr-only">
+          {pinIsSet ? 'PIN baru' : 'PIN 4 digit'}
+        </label>
         <input
+          id="parent-pin-new"
           inputMode="numeric"
-          placeholder="PIN 4 digit"
-          className="w-full rounded-xl border px-3 py-3 text-2xl"
+          placeholder={pinIsSet ? 'PIN baru (4 digit)' : 'PIN 4 digit'}
+          className="w-full rounded-xl border px-3 py-3 text-2xl tracking-widest"
           maxLength={4}
           value={pin}
           onChange={(e) =>
@@ -729,7 +687,12 @@ function ParentPage() {
         <button
           type="button"
           className="text-sm text-primary-600"
-          onClick={() => setStep('gate')}
+          onClick={() => {
+            setStep('gate');
+            setPin('');
+            setCurrentPin('');
+            setErr(null);
+          }}
         >
           Batal
         </button>
@@ -1008,12 +971,17 @@ function DashCard({
 }
 
 function AdminChildrenPage() {
+  const { data: session } = authClient.useSession();
+  const role = session?.user?.role ?? '';
+  const canDeleteChild = role === 'super_admin' || role === 'content_editor';
+
   const [rows, setRows] = useState<
     Awaited<ReturnType<typeof adminApi.getChildren>>
   >([]);
   const [err, setErr] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
-  useEffect(() => {
+  const load = useCallback(() => {
     adminApi
       .getChildren()
       .then(setRows)
@@ -1021,6 +989,30 @@ function AdminChildrenPage() {
         setErr(e instanceof Error ? e.message : 'Gagal memuat daftar anak'),
       );
   }, []);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  const handleDelete = async (id: string, name: string) => {
+    if (
+      !globalThis.confirm(
+        `Hapus profil "${name}" beserta progresnya? Tindakan ini tidak bisa dibatalkan.`,
+      )
+    ) {
+      return;
+    }
+    setErr(null);
+    setDeletingId(id);
+    try {
+      await adminApi.deleteChild(id);
+      setRows((prev) => prev.filter((r) => r.id !== id));
+    } catch (e: unknown) {
+      setErr(e instanceof Error ? e.message : 'Gagal menghapus profil');
+    } finally {
+      setDeletingId(null);
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -1032,6 +1024,12 @@ function AdminChildrenPage() {
         </code>
         ).
       </p>
+      {canDeleteChild ? (
+        <p className="text-sm text-neutral-500">
+          Super admin dan editor konten dapat menghapus profil dari tabel di
+          bawah.
+        </p>
+      ) : null}
       {err ? <p className="text-sm text-red-600">{err}</p> : null}
       <div className="overflow-x-auto rounded-2xl border border-neutral-200 bg-white">
         <table className="min-w-full text-left text-sm">
@@ -1040,6 +1038,9 @@ function AdminChildrenPage() {
               <th className="px-4 py-3 font-semibold">Nama</th>
               <th className="px-4 py-3 font-semibold">Mode</th>
               <th className="px-4 py-3 font-semibold">Avatar</th>
+              <th className="px-4 py-3 font-semibold w-[1%] whitespace-nowrap">
+                Aksi
+              </th>
             </tr>
           </thead>
           <tbody>
@@ -1056,6 +1057,20 @@ function AdminChildrenPage() {
                 </td>
                 <td className="px-4 py-3">{p.ageMode}</td>
                 <td className="px-4 py-3 font-mono text-xs">{p.avatarKey}</td>
+                <td className="px-4 py-3">
+                  {canDeleteChild ? (
+                    <Button
+                      variant="secondary"
+                      className="min-h-10 min-w-0 px-3 py-2 text-sm text-red-700 border-red-200 hover:bg-red-50"
+                      disabled={deletingId !== null}
+                      onClick={() => handleDelete(p.id, p.name)}
+                    >
+                      {deletingId === p.id ? 'Menghapus…' : 'Hapus'}
+                    </Button>
+                  ) : (
+                    <span className="text-neutral-400">—</span>
+                  )}
+                </td>
               </tr>
             ))}
           </tbody>

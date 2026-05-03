@@ -108,7 +108,7 @@ admin.patch('/children/:id', requireAdminRole(superAdminOnly), async (c) => {
   return c.json({ data: updated });
 });
 
-admin.delete('/children/:id', requireAdminRole(superAdminOnly), async (c) => {
+admin.delete('/children/:id', requireAdminRole(writeAdminRoles), async (c) => {
   const id = c.req.param('id');
   if (!id) return c.json({ error: 'bad request' }, 400);
   const before = await prisma.childProfile.findUnique({ where: { id } });

@@ -29,6 +29,13 @@ export const verifyPinSchema = z.object({
   pin: pinSchema,
 });
 
+export const changePinSchema = z.object({
+  currentPin: pinSchema,
+  pin: pinSchema,
+  recoveryQuestion: z.string().min(3).max(100),
+  recoveryAnswer: z.string().min(2).max(50),
+});
+
 export const submitActivitySchema = z.object({
   score: z.number().int().nonnegative(),
   maxScore: z.number().int().positive(),

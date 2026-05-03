@@ -3,7 +3,7 @@ import { hcApi, unwrapData } from '@/lib/hono-client';
 
 export type ApiError = { code: string; message: string };
 
-type ProfileRow = {
+export type ProfileRow = {
   id: string;
   name: string;
   avatarKey: string;
@@ -20,6 +20,17 @@ export const api = {
     avatarKey: string;
     ageMode: 'TK' | 'SD1';
   }) => unwrapData<ProfileRow>(await hcApi.api.profiles.$post({ json: body })),
+
+  patchProfileSelf: async (
+    id: string,
+    body: Partial<{ name: string; avatarKey: string; ageMode: 'TK' | 'SD1' }>,
+  ) =>
+    unwrapData<ProfileRow>(
+      await hcApi.api.profiles[':id'].self.$patch({
+        param: { id },
+        json: body,
+      }),
+    ),
 
   getDashboard: async (childId: string) =>
     unwrapData<Record<string, unknown>>(
@@ -107,6 +118,23 @@ export const api = {
   }) =>
     unwrapData<{ ok: true; sessionToken: string; expiresAt: string }>(
       await hcApi.api.parent['setup-pin'].$post({
+        json: body,
+      }),
+    ),
+
+  getPinStatus: async () =>
+    unwrapData<{ pinIsSet: boolean }>(
+      await hcApi.api.parent['pin-status'].$get(),
+    ),
+
+  changePin: async (body: {
+    currentPin: string;
+    pin: string;
+    recoveryQuestion: string;
+    recoveryAnswer: string;
+  }) =>
+    unwrapData<{ ok: true; sessionToken: string; expiresAt: string }>(
+      await hcApi.api.parent['change-pin'].$post({
         json: body,
       }),
     ),

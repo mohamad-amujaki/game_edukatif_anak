@@ -59,6 +59,36 @@ profilesCrudApp.post('/api/profiles', async (c) => {
   );
 });
 
+/**
+ * Ubah profil dari perangkat bersama (tanpa PIN) — sama seperti membuat profil baru,
+ * untuk UX pemilih pemain di beranda anak.
+ */
+profilesCrudApp.patch('/api/profiles/:id/self', async (c) => {
+  const id = c.req.param('id');
+  const body = await c.req.json().catch(() => null);
+  const parsed = updateProfileSchema.safeParse(body);
+  if (!parsed.success)
+    return jsonErr('VALIDATION_ERROR', parsed.error.message, 400);
+
+  const exists = await prisma.childProfile.findUnique({ where: { id } });
+  if (!exists) return jsonErr('NOT_FOUND', 'Profil tidak ada', 404);
+
+  const updated = await prisma.childProfile.update({
+    where: { id },
+    data: parsed.data,
+  });
+
+  return c.json({
+    data: {
+      id: updated.id,
+      name: updated.name,
+      avatarKey: updated.avatarKey,
+      ageMode: updated.ageMode,
+      createdAt: updated.createdAt.toISOString(),
+    },
+  });
+});
+
 profilesCrudApp.patch('/api/profiles/:id', async (c) => {
   const gate = await denyUnlessSuperParent(c);
   if (gate) return gate;

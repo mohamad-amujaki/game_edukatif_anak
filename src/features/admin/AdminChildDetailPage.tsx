@@ -18,7 +18,9 @@ const AVATARS = [
 export function AdminChildDetailPage({ childId }: { childId: string }) {
   const navigate = useNavigate();
   const { data: session } = authClient.useSession();
-  const isSuper = session?.user?.role === 'super_admin';
+  const role = session?.user?.role ?? '';
+  const isSuper = role === 'super_admin';
+  const canDeleteChild = role === 'super_admin' || role === 'content_editor';
 
   const [name, setName] = useState('');
   const [ageMode, setAgeMode] = useState<'TK' | 'SD1'>('TK');
@@ -57,7 +59,7 @@ export function AdminChildDetailPage({ childId }: { childId: string }) {
   };
 
   const remove = async () => {
-    if (!isSuper) return;
+    if (!canDeleteChild) return;
     if (!confirm(`Hapus profil "${name}"? Tidak dapat dibatalkan.`)) return;
     setErr(null);
     try {
@@ -163,9 +165,23 @@ export function AdminChildDetailPage({ childId }: { childId: string }) {
               Hapus profil
             </button>
           </div>
+        ) : canDeleteChild ? (
+          <div className="mt-6">
+            <button
+              type="button"
+              className="rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm font-medium text-red-800"
+              onClick={() => void remove()}
+            >
+              Hapus profil
+            </button>
+            <p className="mt-3 text-sm text-neutral-500">
+              Mengubah data atau reset progres memerlukan super_admin.
+            </p>
+          </div>
         ) : (
           <p className="mt-6 text-sm text-neutral-500">
-            Mengubah/hapus profil anak memerlukan super_admin (sesuai PRD).
+            Akun analyst hanya dapat melihat data. Mengubah atau menghapus
+            profil memerlukan super_admin atau editor konten.
           </p>
         )}
       </div>

@@ -3,11 +3,22 @@ import { Hono } from 'hono';
 import { prisma } from '../../db';
 import { createParentSession } from '../../parent-session';
 import { hashAnswer, hashPin, verifyPin } from '../../pin';
-import { setupPinSchema, verifyPinSchema } from '../../schemas';
+import {
+  changePinSchema,
+  setupPinSchema,
+  verifyPinSchema,
+} from '../../schemas';
 import { jsonErr, parentGuard } from './shared';
 
 /** PIN orang tua, pengaturan perangkat, laporan — dipasang di `web/index`. */
 export const parentAreaApp = new Hono();
+
+parentAreaApp.get('/api/parent/pin-status', async (c) => {
+  const settings = await prisma.parentSettings.findUnique({
+    where: { id: 'singleton' },
+  });
+  return c.json({ data: { pinIsSet: Boolean(settings?.pinHash) } });
+});
 
 parentAreaApp.post('/api/parent/setup-pin', async (c) => {
   const body = await c.req.json().catch(() => null);
@@ -43,6 +54,41 @@ parentAreaApp.post('/api/parent/setup-pin', async (c) => {
   return c.json(
     { data: { ok: true as const, sessionToken: token, expiresAt } },
     201,
+  );
+});
+
+parentAreaApp.post('/api/parent/change-pin', async (c) => {
+  const body = await c.req.json().catch(() => null);
+  const parsed = changePinSchema.safeParse(body);
+  if (!parsed.success)
+    return jsonErr('VALIDATION_ERROR', parsed.error.message, 400);
+
+  const settings = await prisma.parentSettings.findUnique({
+    where: { id: 'singleton' },
+  });
+  if (!settings?.pinHash)
+    return jsonErr('PIN_NOT_SET', 'PIN belum diatur', 400);
+
+  const oldOk = await verifyPin(parsed.data.currentPin, settings.pinHash);
+  if (!oldOk) return jsonErr('PIN_INCORRECT', 'PIN lama salah', 403);
+
+  const pinHash = await hashPin(parsed.data.pin);
+  const answerHash = await hashAnswer(parsed.data.recoveryAnswer);
+
+  await prisma.parentSettings.update({
+    where: { id: 'singleton' },
+    data: {
+      pinHash,
+      pinSetupQuestion: parsed.data.recoveryQuestion,
+      pinSetupAnswerHash: answerHash,
+    },
+  });
+
+  const token = createParentSession();
+  const expiresAt = new Date(Date.now() + 30 * 60 * 1000).toISOString();
+  return c.json(
+    { data: { ok: true as const, sessionToken: token, expiresAt } },
+    200,
   );
 });
 
