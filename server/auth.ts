@@ -2,6 +2,10 @@ import { APIError, betterAuth } from 'better-auth';
 import { prismaAdapter } from 'better-auth/adapters/prisma';
 import { admin, createAccessControl } from 'better-auth/plugins';
 import { allowedBrowserOrigins } from './allowed-origins';
+import {
+  betterAuthAllowedHosts,
+  betterAuthBaseUrlFallback,
+} from './better-auth-base-url';
 import { prisma } from './db';
 
 function authSecret(): string {
@@ -62,8 +66,16 @@ const roleAnalyst = ac.newRole({
 export const auth = betterAuth({
   database: prismaAdapter(prisma, { provider: 'postgresql' }),
   secret: authSecret(),
-  /** Dev default mengikuti origin Vite (`pnpm dev`); override via BETTER_AUTH_URL. */
-  baseURL: process.env.BETTER_AUTH_URL ?? 'http://localhost:5173',
+  /**
+   * Dynamic base URL: ambil host dari request (`x-forwarded-host` saat di belakang proxy).
+   * Deploy Netlify → Fly: browser memanggil `https://….netlify.app/api/auth/*`; Fly harus
+   * mengenali host Netlify agar cookie/sesi tidak “menempel” ke `*.fly.dev`.
+   * Fallback: `BETTER_AUTH_URL` atau localhost dev.
+   */
+  baseURL: {
+    allowedHosts: betterAuthAllowedHosts(),
+    fallback: betterAuthBaseUrlFallback(),
+  },
   emailAndPassword: {
     enabled: true,
     /** Setelah daftar admin pertama, cookie sesi langsung aktif (tanpa login kedua). */

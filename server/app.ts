@@ -4,6 +4,7 @@ import { prettyJSON } from 'hono/pretty-json';
 import { adminRouter } from './admin';
 import { allowedBrowserOrigins } from './allowed-origins';
 import { auth } from './auth';
+import { injectForwardedHostFromOrigin } from './auth-proxy-headers';
 import { webApi } from './routes/web';
 
 const api = new Hono()
@@ -27,6 +28,8 @@ api.route('/', webApi);
  */
 export type AppType = typeof api;
 
-api.on(['POST', 'GET'], '/api/auth/*', (c) => auth.handler(c.req.raw));
+api.on(['POST', 'GET'], '/api/auth/*', (c) =>
+  auth.handler(injectForwardedHostFromOrigin(c.req.raw)),
+);
 
 export const app = api;

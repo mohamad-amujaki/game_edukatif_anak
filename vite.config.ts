@@ -25,8 +25,8 @@ export default defineConfig({
         ],
       },
       manifest: {
-        name: 'Bimo Belajar',
-        short_name: 'Bimo',
+        name: 'Nura & Al Fatih Belajar',
+        short_name: 'Nual',
         description: 'Game edukatif literasi & matematika untuk anak.',
         theme_color: '#2563eb',
         background_color: '#ffffff',

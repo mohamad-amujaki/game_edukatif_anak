@@ -26,6 +26,13 @@ if (process.env.NODE_ENV === 'production') {
     );
     process.exit(1);
   }
+
+  const authUrlLower = authUrl.toLowerCase();
+  if (authUrlLower.includes('.fly.dev') || authUrlLower.includes('localhost')) {
+    console.warn(
+      '[boot] BETTER_AUTH_URL sebaiknya sama dengan **origin yang dipakai browser** (mis. https://game-edukatif-anak.netlify.app jika frontend Netlify + proxy /api). Jika diisi URL API saja, login/cookie Better Auth sering gagal di produksi.',
+    );
+  }
   if (
     process.env.DATABASE_URL?.includes('pooled.db.prisma.io') &&
     !process.env.DATABASE_DIRECT_URL?.trim()
