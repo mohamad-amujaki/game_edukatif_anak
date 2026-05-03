@@ -76,7 +76,7 @@ export function AdminSettingsPage() {
   };
 
   return (
-    <div className="mx-auto max-w-xl space-y-6">
+    <div className="w-full space-y-6">
       <div>
         <h1 className="text-3xl font-bold">Settings global</h1>
         <p className="mt-1 text-neutral-600">

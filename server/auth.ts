@@ -1,4 +1,4 @@
-import { betterAuth } from 'better-auth';
+import { APIError, betterAuth } from 'better-auth';
 import { prismaAdapter } from 'better-auth/adapters/prisma';
 import { admin, createAccessControl } from 'better-auth/plugins';
 import { allowedBrowserOrigins } from './allowed-origins';
@@ -66,9 +66,48 @@ export const auth = betterAuth({
   baseURL: process.env.BETTER_AUTH_URL ?? 'http://localhost:5173',
   emailAndPassword: {
     enabled: true,
-    autoSignIn: false,
-    /** Hanya bootstrap lewat `pnpm admin:create` — bukan pendaftaran publik. */
-    disableSignUp: true,
+    /** Setelah daftar admin pertama, cookie sesi langsung aktif (tanpa login kedua). */
+    autoSignIn: true,
+    /**
+     * Sign-up email aktif; hook database membatasi ke **satu** akun pertama (`super_admin`).
+     * Admin berikutnya dibuat dari panel admin oleh super_admin.
+     */
+    disableSignUp: false,
+  },
+  databaseHooks: {
+    user: {
+      create: {
+        /**
+         * Hanya untuk **`POST /sign-up/email`** (admin pertama).
+         * Pembuatan user lewat **`/admin/create-user`** (panel super_admin) tidak boleh
+         * memakai aturan "satu akun" ini — tanpa pengecualian, hook akan selalu menolak
+         * setelah user pertama ada.
+         */
+        before: async (user, ctx) => {
+          const path = String(ctx?.path ?? '');
+          const isPublicEmailSignUp =
+            path.includes('sign-up') && path.includes('email');
+          if (!isPublicEmailSignUp) {
+            return undefined;
+          }
+
+          const existing = await prisma.user.count();
+          if (existing > 0) {
+            throw APIError.from('FORBIDDEN', {
+              message:
+                'Pendaftaran admin tertutup. Gunakan masuk dengan akun yang ada / minta super_admin menambahkan Anda.',
+              code: 'ADMIN_SIGNUP_CLOSED',
+            });
+          }
+          return {
+            data: {
+              ...user,
+              role: 'super_admin',
+            },
+          };
+        },
+      },
+    },
   },
   plugins: [
     admin({

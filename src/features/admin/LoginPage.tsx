@@ -1,6 +1,6 @@
 import { Button } from '@/components/ui/Button';
 import { authClient } from '@/lib/auth-client';
-import { useNavigate } from '@tanstack/react-router';
+import { Link, useNavigate } from '@tanstack/react-router';
 import { useState } from 'react';
 
 export function LoginPage() {
@@ -100,6 +100,13 @@ export function LoginPage() {
         </form>
 
         <p className="text-center mt-6 text-sm text-neutral-500">
+          <Link
+            to="/admin/signup"
+            className="text-primary-600 font-semibold hover:underline"
+          >
+            Daftar admin pertama
+          </Link>
+          {' · '}
           Lupa password? Hubungi tech lead atau super admin.
         </p>
       </div>

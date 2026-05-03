@@ -22,9 +22,9 @@ export function AdminShell() {
   const canEditContent = role === 'super_admin' || role === 'content_editor';
 
   return (
-    <div className="min-h-screen bg-neutral-50 flex flex-col md:flex-row">
+    <div className="min-h-dvh w-full flex flex-col bg-neutral-50 md:flex-row">
       {/* Sidebar */}
-      <aside className="w-full md:w-64 bg-white border-r border-neutral-200 flex flex-col">
+      <aside className="flex w-full shrink-0 flex-col border-neutral-200 bg-white md:w-64 md:border-r">
         <div className="p-6 border-b border-neutral-100">
           <Link
             to="/admin"
@@ -146,8 +146,8 @@ export function AdminShell() {
       </aside>
 
       {/* Main Content */}
-      <main className="flex-1 overflow-auto bg-neutral-50">
-        <header className="sticky top-0 z-10 bg-white/80 backdrop-blur border-b border-neutral-200 px-8 py-4 flex items-center justify-between md:hidden">
+      <main className="min-w-0 flex-1 overflow-auto bg-neutral-50">
+        <header className="sticky top-0 z-10 flex items-center justify-between border-b border-neutral-200 bg-white/80 px-4 py-4 backdrop-blur md:hidden">
           <Link to="/admin" className="font-bold text-primary-600">
             Bimo Admin
           </Link>
@@ -155,7 +155,7 @@ export function AdminShell() {
             Menu
           </button>
         </header>
-        <div className="p-8">
+        <div className="w-full px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
           <Outlet />
         </div>
       </main>

@@ -113,7 +113,7 @@ export function AdminImportExportPage() {
   };
 
   return (
-    <div className="mx-auto max-w-3xl space-y-10">
+    <div className="w-full space-y-10">
       <div>
         <h1 className="text-3xl font-bold">Import / Export</h1>
         <p className="mt-1 text-neutral-600">

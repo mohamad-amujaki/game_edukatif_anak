@@ -1,4 +1,4 @@
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '../server/db';
 import { extendedLevelsSeed } from './extended-levels-seed';
 import {
   sd1Literasi1SusunQuestions,
@@ -16,8 +16,6 @@ import {
   tkMath2HitungQuestions,
   tkMath3BandingQuestions,
 } from './math-banks';
-
-const prisma = new PrismaClient();
 
 const vo = (instruksi: string) =>
   JSON.stringify({

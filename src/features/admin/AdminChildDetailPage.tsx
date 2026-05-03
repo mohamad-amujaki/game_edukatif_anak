@@ -86,7 +86,7 @@ export function AdminChildDetailPage({ childId }: { childId: string }) {
   if (err && !name) return <p className="text-red-600">{err}</p>;
 
   return (
-    <div className="mx-auto max-w-lg space-y-6">
+    <div className="w-full space-y-6">
       <Link
         to="/admin/children"
         className="text-sm font-medium text-primary-600 hover:underline"

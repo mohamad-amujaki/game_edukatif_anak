@@ -14,6 +14,7 @@ import { AdminSettingsPage } from '@/features/admin/AdminSettingsPage';
 import { AdminShell } from '@/features/admin/AdminShell';
 import { AdminUsersPage } from '@/features/admin/AdminUsersPage';
 import { LoginPage as AdminLoginPage } from '@/features/admin/LoginPage';
+import { SignupPage as AdminSignupPage } from '@/features/admin/SignupPage';
 import { StickerAlbumPage } from '@/features/child/StickerAlbumPage';
 import { OnboardingFlowPage } from '@/features/onboarding/OnboardingFlowPage';
 import { SuperParentPage } from '@/features/parent/SuperParentPage';
@@ -33,6 +34,7 @@ import {
   createRouter,
   redirect,
   useNavigate,
+  useRouterState,
 } from '@tanstack/react-router';
 import { Provider as JotaiProvider } from 'jotai';
 import { useAtom } from 'jotai/react';
@@ -49,8 +51,54 @@ const AVATARS = [
   'fox',
 ];
 
-function Shell({ children }: { children: React.ReactNode }) {
-  return <div className="mx-auto min-h-dvh max-w-lg pb-10">{children}</div>;
+function AppChrome({
+  children,
+  variant,
+}: {
+  children: React.ReactNode;
+  variant: 'kids' | 'admin';
+}) {
+  return (
+    <div
+      className={
+        variant === 'admin'
+          ? 'min-h-dvh w-full max-w-none'
+          : 'mx-auto min-h-dvh max-w-lg pb-10 w-full'
+      }
+    >
+      {children}
+    </div>
+  );
+}
+
+function RootLayout() {
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const isAdmin = pathname.startsWith('/admin');
+
+  return (
+    <JotaiProvider>
+      <GameFeedbackSync />
+      <AppChrome variant={isAdmin ? 'admin' : 'kids'}>
+        {!isAdmin ? (
+          <header className="sticky top-0 z-10 flex items-center justify-between bg-[color:var(--color-canvas)]/95 px-4 py-3 backdrop-blur">
+            <Link
+              to="/"
+              className="font-[family-name:var(--font-display)] text-xl font-bold text-[var(--color-primary-600)]"
+            >
+              Bimo Belajar
+            </Link>
+            <Link
+              to="/parent"
+              className="rounded-full bg-neutral-200 px-3 py-2 text-sm font-semibold text-neutral-700"
+            >
+              Orang tua
+            </Link>
+          </header>
+        ) : null}
+        <Outlet />
+      </AppChrome>
+    </JotaiProvider>
+  );
 }
 
 /** Sekali per profil anak — arahkan ke tutorial sebelum dashboard/track/play. */
@@ -72,28 +120,7 @@ function ensureChildOnboardingGate(opts: {
 }
 
 const rootRoute = createRootRoute({
-  component: () => (
-    <JotaiProvider>
-      <GameFeedbackSync />
-      <Shell>
-        <header className="sticky top-0 z-10 flex items-center justify-between bg-[color:var(--color-canvas)]/95 px-4 py-3 backdrop-blur">
-          <Link
-            to="/"
-            className="font-[family-name:var(--font-display)] text-xl font-bold text-[var(--color-primary-600)]"
-          >
-            Bimo Belajar
-          </Link>
-          <Link
-            to="/parent"
-            className="rounded-full bg-neutral-200 px-3 py-2 text-sm font-semibold text-neutral-700"
-          >
-            Orang tua
-          </Link>
-        </header>
-        <Outlet />
-      </Shell>
-    </JotaiProvider>
-  ),
+  component: RootLayout,
 });
 
 const indexRoute = createRoute({
@@ -1092,7 +1119,11 @@ const adminRootRoute = createRoute({
   beforeLoad: async ({ location }) => {
     // Only redirect to login if not already on login page
     const session = await authClient.getSession();
-    if (!session && location.pathname !== '/admin/login') {
+    if (
+      !session &&
+      location.pathname !== '/admin/login' &&
+      location.pathname !== '/admin/signup'
+    ) {
       throw redirect({ to: '/admin/login' });
     }
   },
@@ -1102,6 +1133,12 @@ const adminLoginRoute = createRoute({
   getParentRoute: () => adminRootRoute,
   path: '/login',
   component: AdminLoginPage,
+});
+
+const adminSignupRoute = createRoute({
+  getParentRoute: () => adminRootRoute,
+  path: '/signup',
+  component: AdminSignupPage,
 });
 
 const adminIndexRoute = createRoute({
@@ -1198,6 +1235,7 @@ const routeTree = rootRoute.addChildren([
   adminRootRoute.addChildren([
     adminIndexRoute,
     adminLoginRoute,
+    adminSignupRoute,
     adminChildrenRoute,
     adminChildDetailRoute,
     adminAuditRoute,

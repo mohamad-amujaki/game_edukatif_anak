@@ -41,7 +41,7 @@ export function AdminAnalyticsPage() {
           <p className="mt-1 text-sm text-neutral-500">
             Perbandingan pengguna unik hari ini vs 30 hari terakhir.
           </p>
-          <div className="mt-6 max-w-md space-y-5">
+          <div className="mt-6 w-full max-w-4xl space-y-5">
             <MiniBar
               label="DAU hari ini"
               value={data.dauToday}

@@ -11,6 +11,12 @@ export const profilesCrudApp = new Hono();
 
 profilesCrudApp.get('/api/health', (c) => c.json({ data: { ok: true } }));
 
+/** Untuk UI: apakah form “admin pertama” masih boleh dipakai (belum ada user auth). */
+profilesCrudApp.get('/api/admin-signup/open', async (c) => {
+  const count = await prisma.user.count();
+  return c.json({ open: count === 0 });
+});
+
 profilesCrudApp.get('/api/profiles', async (c) => {
   const list = await prisma.childProfile.findMany({
     orderBy: { createdAt: 'asc' },

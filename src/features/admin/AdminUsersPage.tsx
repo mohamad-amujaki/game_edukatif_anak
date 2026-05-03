@@ -43,6 +43,7 @@ function getAuthAdmin(): AuthAdmin {
 
 export function AdminUsersPage() {
   const { data: session } = authClient.useSession();
+  const canCreateUsers = session?.user?.role === 'super_admin';
   const [rows, setRows] = useState<ListPayload['users']>([]);
   const [total, setTotal] = useState(0);
   const [err, setErr] = useState<string | null>(null);
@@ -78,6 +79,10 @@ export function AdminUsersPage() {
   const create = async () => {
     setErr(null);
     setMsg(null);
+    if (!canCreateUsers) {
+      setErr('Hanya super_admin yang dapat menambahkan pengguna admin.');
+      return;
+    }
     try {
       const admin = getAuthAdmin();
       const res = await admin.createUser({
@@ -115,14 +120,24 @@ export function AdminUsersPage() {
 
       <section className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm">
         <h2 className="text-lg font-semibold">Buat pengguna baru</h2>
+        {!canCreateUsers ? (
+          <p className="mt-3 text-sm text-amber-800">
+            Hanya akun <strong>super_admin</strong> yang bisa menambahkan
+            pengguna (permission Better Auth:{' '}
+            <code className="text-xs">user.create</code>
+            ). Masuk sebagai super_admin atau minta super_admin yang ada
+            menambahkan Anda.
+          </p>
+        ) : null}
         <div className="mt-4 grid gap-3 sm:grid-cols-2">
           <label className="block sm:col-span-2">
             <span className="text-xs font-medium text-neutral-600">Email</span>
             <input
-              className="mt-1 w-full rounded-lg border border-neutral-200 px-3 py-2 text-sm"
+              className="mt-1 w-full rounded-lg border border-neutral-200 px-3 py-2 text-sm disabled:bg-neutral-50 disabled:text-neutral-400"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               autoComplete="off"
+              disabled={!canCreateUsers}
             />
           </label>
           <label className="block">
@@ -131,10 +146,11 @@ export function AdminUsersPage() {
             </span>
             <input
               type="password"
-              className="mt-1 w-full rounded-lg border border-neutral-200 px-3 py-2 text-sm"
+              className="mt-1 w-full rounded-lg border border-neutral-200 px-3 py-2 text-sm disabled:bg-neutral-50 disabled:text-neutral-400"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               autoComplete="new-password"
+              disabled={!canCreateUsers}
             />
           </label>
           <label className="block">
@@ -142,15 +158,16 @@ export function AdminUsersPage() {
               Nama tampilan
             </span>
             <input
-              className="mt-1 w-full rounded-lg border border-neutral-200 px-3 py-2 text-sm"
+              className="mt-1 w-full rounded-lg border border-neutral-200 px-3 py-2 text-sm disabled:bg-neutral-50 disabled:text-neutral-400"
               value={name}
               onChange={(e) => setName(e.target.value)}
+              disabled={!canCreateUsers}
             />
           </label>
           <label className="block sm:col-span-2">
             <span className="text-xs font-medium text-neutral-600">Role</span>
             <select
-              className="mt-1 w-full rounded-lg border border-neutral-200 px-3 py-2 text-sm"
+              className="mt-1 w-full rounded-lg border border-neutral-200 px-3 py-2 text-sm disabled:bg-neutral-50 disabled:text-neutral-400"
               value={role}
               onChange={(e) =>
                 setRole(
@@ -160,6 +177,7 @@ export function AdminUsersPage() {
                     | 'super_admin',
                 )
               }
+              disabled={!canCreateUsers}
             >
               <option value="analyst">analyst</option>
               <option value="content_editor">content_editor</option>
@@ -168,7 +186,11 @@ export function AdminUsersPage() {
           </label>
         </div>
         <div className="mt-4">
-          <Button type="button" onClick={() => void create()}>
+          <Button
+            type="button"
+            disabled={!canCreateUsers}
+            onClick={() => void create()}
+          >
             Buat pengguna
           </Button>
         </div>
