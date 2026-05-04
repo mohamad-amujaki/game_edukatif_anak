@@ -90,6 +90,7 @@ export default function AdminChildrenRoutePage() {
           <thead className="border-b border-neutral-100 bg-neutral-50">
             <tr>
               <th className="px-4 py-3 font-semibold">Nama</th>
+              <th className="px-4 py-3 font-semibold">Parent</th>
               <th className="px-4 py-3 font-semibold">Mode</th>
               <th className="px-4 py-3 font-semibold">Avatar</th>
               <th className="px-4 py-3 font-semibold w-[1%] whitespace-nowrap">
@@ -109,6 +110,7 @@ export default function AdminChildrenRoutePage() {
                     {p.name}
                   </Link>
                 </td>
+                <td className="px-4 py-3">{p.parentName || 'guest'}</td>
                 <td className="px-4 py-3">{p.ageMode}</td>
                 <td className="px-4 py-3 font-mono text-xs">{p.avatarKey}</td>
                 <td className="px-4 py-3">

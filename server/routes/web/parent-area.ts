@@ -1,8 +1,15 @@
 import { timingSafeEqual } from 'node:crypto';
 import type { Track } from '@prisma/client';
+import type { Context } from 'hono';
 import { Hono } from 'hono';
-import { gateChildProfileForKidAppOrJson } from '../../child-access';
+import {
+  adoptOrphanGuestProfiles,
+  gateChildProfileForKidAppOrJson,
+  isParentAppRole,
+  sessionUserFromCookies,
+} from '../../child-access';
 import { prisma } from '../../db';
+import { ensureGuestBindingCookie } from '../../guest-binding';
 import { createParentSession } from '../../parent-session';
 import { hashAnswer, hashPin, verifyAnswer, verifyPin } from '../../pin';
 import { createRateLimiter } from '../../rate-limit';
@@ -50,6 +57,15 @@ function maskParentEmail(email: string): string {
   const [u, d] = email.split('@');
   if (!d || !u) return '***';
   return `${u.slice(0, Math.min(2, u.length))}***@${d}`;
+}
+
+async function allowParentSessionOrAccount(
+  c: Context,
+  sessionToken: string | undefined,
+): Promise<boolean> {
+  if (await parentGuard(sessionToken)) return true;
+  const u = await sessionUserFromCookies(c);
+  return Boolean(u && isParentAppRole(u.role));
 }
 
 parentAreaApp.get('/api/parent/pin-status', async (c) => {
@@ -253,7 +269,7 @@ parentAreaApp.post(
 
 parentAreaApp.get('/api/parent/settings', async (c) => {
   const token = c.req.header('X-Parent-Session');
-  if (!(await parentGuard(token)))
+  if (!(await allowParentSessionOrAccount(c, token)))
     return jsonErr('UNAUTHORIZED', 'Butuh sesi orang tua', 401);
 
   const s = await prisma.parentSettings.findUnique({
@@ -278,7 +294,7 @@ parentAreaApp.get('/api/parent/settings', async (c) => {
 
 parentAreaApp.put('/api/parent/settings', async (c) => {
   const token = c.req.header('X-Parent-Session');
-  if (!(await parentGuard(token)))
+  if (!(await allowParentSessionOrAccount(c, token)))
     return jsonErr('UNAUTHORIZED', 'Butuh sesi orang tua', 401);
 
   const raw = await c.req.json().catch(() => ({}));
@@ -348,9 +364,225 @@ parentAreaApp.put('/api/parent/settings', async (c) => {
   });
 });
 
+parentAreaApp.get('/api/parent/dashboard', async (c) => {
+  const token = c.req.header('X-Parent-Session');
+  if (!(await allowParentSessionOrAccount(c, token)))
+    return jsonErr('UNAUTHORIZED', 'Butuh sesi orang tua', 401);
+
+  const user = await sessionUserFromCookies(c);
+  const children = await (async () => {
+    if (user && isParentAppRole(user.role)) {
+      return prisma.childProfile.findMany({
+        where: { ownerUserId: user.id },
+        orderBy: { createdAt: 'asc' },
+      });
+    }
+    // Fallback untuk mode tamu + sesi PIN di perangkat ini.
+    const binding = ensureGuestBindingCookie(c);
+    await adoptOrphanGuestProfiles(binding);
+    return prisma.childProfile.findMany({
+      where: { ownerUserId: null, guestBindingId: binding },
+      orderBy: { createdAt: 'asc' },
+    });
+  })();
+
+  if (children.length === 0) {
+    return c.json({
+      data: {
+        totalChildren: 0,
+        activeChildren7d: 0,
+        retention7dPct: 0,
+        totalActivitiesCompleted: 0,
+        totalPlayMinutes: 0,
+        averageStars: 0,
+        levelCompletionPct: 0,
+        perTrack: [] as Array<{ track: Track; averageStars: number }>,
+        childSummaries: [] as Array<Record<string, unknown>>,
+      },
+    });
+  }
+
+  const childIds = children.map((cRow) => cRow.id);
+  const now = Date.now();
+  const sevenDaysAgo = new Date(now - 7 * 24 * 60 * 60 * 1000);
+  const sevenDateKey = sevenDaysAgo.toISOString().slice(0, 10);
+
+  const [progressRows, playRows, levelMasteredRows, xpRows, levelDefs] =
+    await Promise.all([
+      prisma.progress.findMany({
+        where: { childId: { in: childIds } },
+        select: {
+          childId: true,
+          bestStars: true,
+          firstCompletedAt: true,
+          activity: { select: { level: { select: { track: true } } } },
+        },
+      }),
+      prisma.playSession.findMany({
+        where: { childId: { in: childIds } },
+        select: { childId: true, durationSec: true, dateKey: true },
+      }),
+      prisma.levelMastery.findMany({
+        where: { childId: { in: childIds }, isMastered: true },
+        select: { childId: true },
+      }),
+      prisma.xpLog.groupBy({
+        by: ['childId'],
+        where: { childId: { in: childIds } },
+        _sum: { amount: true },
+      }),
+      prisma.levelDefinition.groupBy({
+        by: ['ageMode'],
+        _count: { id: true },
+      }),
+    ]);
+
+  const totalLevelByAge = new Map(
+    levelDefs.map((r) => [r.ageMode, r._count.id ?? 0]),
+  );
+  const xpByChild = new Map(xpRows.map((r) => [r.childId, r._sum.amount ?? 0]));
+  const progressByChild = new Map<string, typeof progressRows>();
+  const playByChild = new Map<string, typeof playRows>();
+  const masteredCountByChild = new Map<string, number>();
+
+  for (const row of progressRows) {
+    const list = progressByChild.get(row.childId) ?? [];
+    list.push(row);
+    progressByChild.set(row.childId, list);
+  }
+  for (const row of playRows) {
+    const list = playByChild.get(row.childId) ?? [];
+    list.push(row);
+    playByChild.set(row.childId, list);
+  }
+  for (const row of levelMasteredRows) {
+    masteredCountByChild.set(
+      row.childId,
+      (masteredCountByChild.get(row.childId) ?? 0) + 1,
+    );
+  }
+
+  let totalActivitiesCompleted = 0;
+  let totalPlayMinutes = 0;
+  let allStarsSum = 0;
+  let allStarsCount = 0;
+  let activeChildren7d = 0;
+  let eligibleRetention = 0;
+  let retainedChildren7d = 0;
+  let masteredAllChildren = 0;
+  let totalLevelsAllChildren = 0;
+  const trackStars: Record<Track, { sum: number; count: number }> = {
+    literasi: { sum: 0, count: 0 },
+    math: { sum: 0, count: 0 },
+  };
+
+  const childSummaries = children.map((child) => {
+    const childProgress = progressByChild.get(child.id) ?? [];
+    const childPlay = playByChild.get(child.id) ?? [];
+
+    const childActivitiesCompleted = childProgress.filter(
+      (p) => p.firstCompletedAt,
+    ).length;
+    const childPlayMinutes = Math.round(
+      childPlay.reduce((acc, row) => acc + row.durationSec, 0) / 60,
+    );
+    const childStarsSum = childProgress.reduce(
+      (acc, p) => acc + p.bestStars,
+      0,
+    );
+    const childAvgStars =
+      childProgress.length === 0
+        ? 0
+        : Math.round((childStarsSum / childProgress.length) * 10) / 10;
+    const childMastered = masteredCountByChild.get(child.id) ?? 0;
+    const childTotalLevels = totalLevelByAge.get(child.ageMode) ?? 0;
+    const childCompletionPct =
+      childTotalLevels === 0
+        ? 0
+        : Math.round((childMastered / childTotalLevels) * 100);
+    const childActive7d = childPlay.some((s) => s.dateKey >= sevenDateKey);
+
+    totalActivitiesCompleted += childActivitiesCompleted;
+    totalPlayMinutes += childPlayMinutes;
+    allStarsSum += childStarsSum;
+    allStarsCount += childProgress.length;
+    if (childActive7d) activeChildren7d += 1;
+    if (child.createdAt <= sevenDaysAgo) {
+      eligibleRetention += 1;
+      if (childActive7d) retainedChildren7d += 1;
+    }
+    masteredAllChildren += childMastered;
+    totalLevelsAllChildren += childTotalLevels;
+
+    for (const p of childProgress) {
+      const track = p.activity.level.track;
+      trackStars[track].sum += p.bestStars;
+      trackStars[track].count += 1;
+    }
+
+    return {
+      id: child.id,
+      name: child.name,
+      ageMode: child.ageMode,
+      createdAt: child.createdAt.toISOString(),
+      totalXp: xpByChild.get(child.id) ?? 0,
+      totalActivitiesCompleted: childActivitiesCompleted,
+      totalPlayMinutes: childPlayMinutes,
+      averageStars: childAvgStars,
+      active7d: childActive7d,
+      levelCompletionPct: childCompletionPct,
+    };
+  });
+
+  const perTrack: Array<{ track: Track; averageStars: number }> = [
+    {
+      track: 'literasi',
+      averageStars:
+        trackStars.literasi.count === 0
+          ? 0
+          : Math.round(
+              (trackStars.literasi.sum / trackStars.literasi.count) * 10,
+            ) / 10,
+    },
+    {
+      track: 'math',
+      averageStars:
+        trackStars.math.count === 0
+          ? 0
+          : Math.round((trackStars.math.sum / trackStars.math.count) * 10) / 10,
+    },
+  ];
+
+  const retention7dPct =
+    eligibleRetention === 0
+      ? 0
+      : Math.round((retainedChildren7d / eligibleRetention) * 100);
+  const levelCompletionPct =
+    totalLevelsAllChildren === 0
+      ? 0
+      : Math.round((masteredAllChildren / totalLevelsAllChildren) * 100);
+
+  return c.json({
+    data: {
+      totalChildren: children.length,
+      activeChildren7d,
+      retention7dPct,
+      totalActivitiesCompleted,
+      totalPlayMinutes,
+      averageStars:
+        allStarsCount === 0
+          ? 0
+          : Math.round((allStarsSum / allStarsCount) * 10) / 10,
+      levelCompletionPct,
+      perTrack,
+      childSummaries,
+    },
+  });
+});
+
 parentAreaApp.get('/api/parent/report/:childId', async (c) => {
   const token = c.req.header('X-Parent-Session');
-  if (!(await parentGuard(token)))
+  if (!(await allowParentSessionOrAccount(c, token)))
     return jsonErr('UNAUTHORIZED', 'Butuh sesi orang tua', 401);
 
   const childId = c.req.param('childId');

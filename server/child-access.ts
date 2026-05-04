@@ -28,7 +28,9 @@ function isStaffRole(role: string | null): role is string {
 
 /** Sesi bermain utama: orang tua ber-akun (bukan staf panel admin). */
 export function isParentAppRole(role: string | null): boolean {
-  return !isStaffRole(role) && role === 'parent';
+  // Legacy akun/email sosial lama bisa punya `role = null`.
+  // Selama bukan role staf admin, perlakukan sebagai parent app.
+  return !isStaffRole(role);
 }
 
 /**

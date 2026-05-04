@@ -216,13 +216,21 @@ export function HomeLanding() {
               ({session?.user?.email ?? '—'})
             </span>
           </p>
-          <button
-            type="button"
-            className="rounded-xl bg-white px-3 py-2 text-sm font-semibold text-primary-800 ring-1 ring-primary-200 hover:bg-primary-100"
-            onClick={() => void handleSignOutParent()}
-          >
-            Keluar akun
-          </button>
+          <div className="flex flex-wrap items-center gap-2">
+            <Link
+              to="/parent"
+              className="rounded-xl bg-white px-3 py-2 text-sm font-semibold text-primary-800 ring-1 ring-primary-200 hover:bg-primary-100"
+            >
+              Lihat dashboard
+            </Link>
+            <button
+              type="button"
+              className="rounded-xl bg-white px-3 py-2 text-sm font-semibold text-primary-800 ring-1 ring-primary-200 hover:bg-primary-100"
+              onClick={() => void handleSignOutParent()}
+            >
+              Keluar akun
+            </button>
+          </div>
         </div>
       ) : (
         <div className="rounded-2xl border border-amber-200 bg-amber-50/90 px-4 py-3 text-center text-sm text-amber-950 shadow-sm">

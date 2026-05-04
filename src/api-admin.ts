@@ -74,6 +74,7 @@ export type AdminChildRow = {
   ageMode: string;
   createdAt: string;
   updatedAt: string;
+  parentName: string;
 };
 
 export type AdminActivitySummary = {

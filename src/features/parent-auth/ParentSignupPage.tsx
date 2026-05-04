@@ -80,9 +80,31 @@ export function ParentSignupPage({ onBack }: Props) {
       });
 
       if (res.error) {
-        const msg = /exists|duplicate|already|terdaftar/i.test(
-          `${res.error.message ?? ''}${res.error.code ?? ''}`,
-        )
+        const rawErr = `${res.error.message ?? ''}${res.error.code ?? ''}`;
+        // Kompatibilitas backend lama: blokir signup umum dengan pesan admin.
+        // Kirim role parent eksplisit agar jalur pendaftaran orang tua tetap lolos.
+        if (/admin.*tertutup|admin.*closed/i.test(rawErr)) {
+          const r = await fetch(`${apiBaseURL()}/api/auth/sign-up/email`, {
+            method: 'POST',
+            credentials: 'include',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              name,
+              email,
+              password,
+              role: 'parent',
+              callbackURL:
+                typeof window !== 'undefined'
+                  ? `${window.location.origin}/`
+                  : '/',
+            }),
+          });
+          if (r.ok) {
+            navigate({ to: '/' });
+            return;
+          }
+        }
+        const msg = /exists|duplicate|already|terdaftar/i.test(rawErr)
           ? 'Email ini sudah terdaftar. Coba Masuk atau gunakan email lain.'
           : (res.error.message ?? 'Data tidak valid.');
         setError(msg);
@@ -132,6 +154,25 @@ export function ParentSignupPage({ onBack }: Props) {
               disabled={loading}
               onClick={() => void googleSignIn()}
             >
+              <svg viewBox="0 0 24 24" className="h-5 w-5" role="img">
+                <title>Google</title>
+                <path
+                  fill="#4285F4"
+                  d="M21.6 12.23c0-.68-.06-1.33-.17-1.95H12v3.69h5.39a4.61 4.61 0 0 1-2 3.03v2.51h3.24c1.9-1.75 2.97-4.33 2.97-7.28Z"
+                />
+                <path
+                  fill="#34A853"
+                  d="M12 22c2.7 0 4.96-.9 6.61-2.43l-3.24-2.51c-.9.6-2.06.96-3.37.96-2.59 0-4.78-1.75-5.56-4.1H3.1v2.58A10 10 0 0 0 12 22Z"
+                />
+                <path
+                  fill="#FBBC05"
+                  d="M6.44 13.92A5.99 5.99 0 0 1 6.13 12c0-.66.12-1.29.31-1.92V7.5H3.1A10 10 0 0 0 2 12c0 1.61.39 3.13 1.1 4.5l3.34-2.58Z"
+                />
+                <path
+                  fill="#EA4335"
+                  d="M12 5.98c1.47 0 2.8.5 3.84 1.49l2.88-2.88C16.95 2.94 14.7 2 12 2A10 10 0 0 0 3.1 7.5l3.34 2.58c.78-2.35 2.97-4.1 5.56-4.1Z"
+                />
+              </svg>
               <span>Gabung atau masuk dengan Google</span>
             </Button>
             <div className="my-6 flex items-center gap-3 text-neutral-400">

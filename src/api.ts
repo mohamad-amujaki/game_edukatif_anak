@@ -153,7 +153,7 @@ export const api = {
       }),
     ),
 
-  getParentSettings: async (token: string) =>
+  getParentSettings: async (token?: string | null) =>
     unwrapData<{
       dailyTimeCapMinutes: number;
       breakReminderMinutes: number;
@@ -165,12 +165,12 @@ export const api = {
       weeklyEmailOptIn: boolean;
     }>(
       await hcApi.api.parent.settings.$get({
-        header: { 'X-Parent-Session': token },
+        ...(token ? { header: { 'X-Parent-Session': token } } : {}),
       }),
     ),
 
   patchParentSettings: async (
-    token: string,
+    token: string | null | undefined,
     body: Partial<{
       dailyTimeCapMinutes: number;
       breakReminderMinutes: number;
@@ -191,7 +191,7 @@ export const api = {
       weeklyEmailOptIn: boolean;
     }>(
       await hcApi.api.parent.settings.$put({
-        header: { 'X-Parent-Session': token },
+        ...(token ? { header: { 'X-Parent-Session': token } } : {}),
         json: body,
       }),
     ),
@@ -244,11 +244,39 @@ export const api = {
       }),
     ),
 
-  getReport: async (token: string, childId: string) =>
+  getReport: async (token: string | null | undefined, childId: string) =>
     unwrapData<Record<string, unknown>>(
       await hcApi.api.parent.report[':childId'].$get({
         param: { childId },
-        header: { 'X-Parent-Session': token },
+        ...(token ? { header: { 'X-Parent-Session': token } } : {}),
+      }),
+    ),
+
+  getParentDashboard: async (token?: string | null) =>
+    unwrapData<{
+      totalChildren: number;
+      activeChildren7d: number;
+      retention7dPct: number;
+      totalActivitiesCompleted: number;
+      totalPlayMinutes: number;
+      averageStars: number;
+      levelCompletionPct: number;
+      perTrack: Array<{ track: 'literasi' | 'math'; averageStars: number }>;
+      childSummaries: Array<{
+        id: string;
+        name: string;
+        ageMode: string;
+        createdAt: string;
+        totalXp: number;
+        totalActivitiesCompleted: number;
+        totalPlayMinutes: number;
+        averageStars: number;
+        active7d: boolean;
+        levelCompletionPct: number;
+      }>;
+    }>(
+      await hcApi.api.parent.dashboard.$get({
+        ...(token ? { header: { 'X-Parent-Session': token } } : {}),
       }),
     ),
 

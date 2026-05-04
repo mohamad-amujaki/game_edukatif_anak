@@ -1,3 +1,4 @@
+import { api } from '@/api';
 import { Button } from '@/components/ui/Button';
 import { apiBaseURL } from '@/lib/api-base-url';
 import { authClient } from '@/lib/auth-client';
@@ -104,6 +105,10 @@ export function ParentLoginPage({ onBack }: Props) {
         return;
       }
 
+      // Parent app: setelah login, cek dulu profil anak milik akun ini.
+      // Jika belum ada, user tetap masuk ke beranda untuk membuat profil baru
+      // (maksimal 4 profil tetap dibatasi di UI + API).
+      await api.getProfiles().catch(() => []);
       navigate({ to: '/' });
     } catch {
       setError('Terjadi kesalahan sistem.');
@@ -138,24 +143,47 @@ export function ParentLoginPage({ onBack }: Props) {
           Progres profil anak dikaitkan ke akun ini (hingga 4 profil).
         </p>
 
-        {googleOAuth ? (
-          <div className="mt-6">
-            <Button
-              type="button"
-              variant="secondary"
-              className="flex w-full items-center justify-center gap-2 py-3 font-semibold"
-              disabled={loading}
-              onClick={() => void googleSignIn()}
-            >
-              <span>Masuk dengan Google</span>
-            </Button>
-            <div className="my-6 flex items-center gap-3 text-neutral-400">
-              <span className="h-px flex-1 bg-neutral-200" />
-              <span className="text-xs font-medium uppercase">atau email</span>
-              <span className="h-px flex-1 bg-neutral-200" />
-            </div>
+        <div className="mt-6">
+          <Button
+            type="button"
+            variant="secondary"
+            className="flex w-full items-center justify-center gap-2 py-3 font-semibold"
+            disabled={loading || !googleOAuth}
+            onClick={() => void googleSignIn()}
+          >
+            <svg viewBox="0 0 24 24" className="h-5 w-5" role="img">
+              <title>Google</title>
+              <path
+                fill="#4285F4"
+                d="M21.6 12.23c0-.68-.06-1.33-.17-1.95H12v3.69h5.39a4.61 4.61 0 0 1-2 3.03v2.51h3.24c1.9-1.75 2.97-4.33 2.97-7.28Z"
+              />
+              <path
+                fill="#34A853"
+                d="M12 22c2.7 0 4.96-.9 6.61-2.43l-3.24-2.51c-.9.6-2.06.96-3.37.96-2.59 0-4.78-1.75-5.56-4.1H3.1v2.58A10 10 0 0 0 12 22Z"
+              />
+              <path
+                fill="#FBBC05"
+                d="M6.44 13.92A5.99 5.99 0 0 1 6.13 12c0-.66.12-1.29.31-1.92V7.5H3.1A10 10 0 0 0 2 12c0 1.61.39 3.13 1.1 4.5l3.34-2.58Z"
+              />
+              <path
+                fill="#EA4335"
+                d="M12 5.98c1.47 0 2.8.5 3.84 1.49l2.88-2.88C16.95 2.94 14.7 2 12 2A10 10 0 0 0 3.1 7.5l3.34 2.58c.78-2.35 2.97-4.1 5.56-4.1Z"
+              />
+            </svg>
+            <span>Masuk dengan Google</span>
+          </Button>
+          {!googleOAuth ? (
+            <p className="mt-2 text-xs text-neutral-500">
+              Login Google belum aktif. Isi `GOOGLE_CLIENT_ID` dan
+              `GOOGLE_CLIENT_SECRET` di server.
+            </p>
+          ) : null}
+          <div className="my-6 flex items-center gap-3 text-neutral-400">
+            <span className="h-px flex-1 bg-neutral-200" />
+            <span className="text-xs font-medium uppercase">atau email</span>
+            <span className="h-px flex-1 bg-neutral-200" />
           </div>
-        ) : null}
+        </div>
 
         <form onSubmit={(e) => void handleLogin(e)} className="space-y-4">
           <div>

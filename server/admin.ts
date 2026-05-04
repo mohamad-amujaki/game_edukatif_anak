@@ -64,9 +64,24 @@ admin.get('/children', async (c) => {
   const list = await prisma.childProfile.findMany({
     where,
     orderBy: { createdAt: 'desc' },
+    include: {
+      ownerUser: {
+        select: { name: true },
+      },
+    },
   });
 
-  return c.json({ data: list });
+  return c.json({
+    data: list.map((row) => ({
+      id: row.id,
+      name: row.name,
+      avatarKey: row.avatarKey,
+      ageMode: row.ageMode,
+      createdAt: row.createdAt,
+      updatedAt: row.updatedAt,
+      parentName: row.ownerUser?.name ?? 'guest',
+    })),
+  });
 });
 
 admin.get('/export/children.csv', async (c) => {

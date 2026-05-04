@@ -15,6 +15,7 @@ import {
   type DevicePreferences,
   applyDevicePreferencesToGameFeedback,
 } from '@/lib/game-feedback-sync';
+import { isStaffAdminRole } from '@/lib/parent-app-roles';
 import { parentSessionAtom } from '@/state/atoms';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
@@ -684,6 +685,10 @@ const parentSuperRoute = createRoute({
 function ParentPage() {
   const queryClient = useQueryClient();
   const [session, setSession] = useAtom(parentSessionAtom);
+  const { data: accountSession } = authClient.useSession();
+  const parentAccountLoggedIn = Boolean(
+    accountSession?.user && !isStaffAdminRole(accountSession.user.role),
+  );
   const [pin, setPin] = useState('');
   const [currentPin, setCurrentPin] = useState('');
   const [step, setStep] = useState<
@@ -719,6 +724,28 @@ function ParentPage() {
     weeklyEmailOptIn: boolean;
   } | null>(null);
   const [settingsSaved, setSettingsSaved] = useState(false);
+  const [parentDashboard, setParentDashboard] = useState<{
+    totalChildren: number;
+    activeChildren7d: number;
+    retention7dPct: number;
+    totalActivitiesCompleted: number;
+    totalPlayMinutes: number;
+    averageStars: number;
+    levelCompletionPct: number;
+    perTrack: Array<{ track: 'literasi' | 'math'; averageStars: number }>;
+    childSummaries: Array<{
+      id: string;
+      name: string;
+      ageMode: string;
+      createdAt: string;
+      totalXp: number;
+      totalActivitiesCompleted: number;
+      totalPlayMinutes: number;
+      averageStars: number;
+      active7d: boolean;
+      levelCompletionPct: number;
+    }>;
+  } | null>(null);
 
   useEffect(() => {
     if (step !== 'gate') return;
@@ -742,13 +769,23 @@ function ParentPage() {
   }, [step]);
 
   useEffect(() => {
-    if (!session) {
-      setIsSuperParent(false);
-      setParentSettings(null);
-      return;
+    if (parentAccountLoggedIn && step === 'gate') {
+      setStep('app');
     }
-    api
-      .getParentSettings(session)
+  }, [parentAccountLoggedIn, step]);
+
+  useEffect(() => {
+    if (!session) {
+      if (!parentAccountLoggedIn) {
+        setIsSuperParent(false);
+        setParentSettings(null);
+        setParentDashboard(null);
+        return;
+      }
+    }
+    const token = session ?? null;
+    void api
+      .getParentSettings(token)
       .then((s) => {
         setIsSuperParent(s.isSuperParent);
         setParentSettings({
@@ -773,7 +810,27 @@ function ParentPage() {
         setIsSuperParent(false);
         setParentSettings(null);
       });
-  }, [session]);
+
+    void api
+      .getParentDashboard(token)
+      .then((d) => {
+        setParentDashboard(d);
+      })
+      .catch(() => {
+        // Tetap tampilkan blok dashboard agar user tahu state-nya.
+        setParentDashboard({
+          totalChildren: 0,
+          activeChildren7d: 0,
+          retention7dPct: 0,
+          totalActivitiesCompleted: 0,
+          totalPlayMinutes: 0,
+          averageStars: 0,
+          levelCompletionPct: 0,
+          perTrack: [],
+          childSummaries: [],
+        });
+      });
+  }, [session, parentAccountLoggedIn]);
 
   const verify = async () => {
     setErr(null);
@@ -814,7 +871,7 @@ function ParentPage() {
   };
 
   const loadReport = async (childId: string) => {
-    if (!session) return;
+    if (!session && !parentAccountLoggedIn) return;
     const r = await api.getReport(session, childId);
     setReport(r);
   };
@@ -1094,6 +1151,91 @@ function ParentPage() {
           </Button>
         ))}
       </div>
+      {parentDashboard ? (
+        <div className="space-y-3 rounded-2xl bg-white p-4 shadow">
+          <p className="font-bold">Dashboard Orang Tua</p>
+          <div className="grid grid-cols-2 gap-2 text-sm sm:grid-cols-4">
+            <div className="rounded-xl bg-neutral-50 px-3 py-2">
+              <p className="text-neutral-500">Anak terdaftar</p>
+              <p className="font-semibold">{parentDashboard.totalChildren}</p>
+            </div>
+            <div className="rounded-xl bg-neutral-50 px-3 py-2">
+              <p className="text-neutral-500">Aktif 7 hari</p>
+              <p className="font-semibold">
+                {parentDashboard.activeChildren7d}
+              </p>
+            </div>
+            <div className="rounded-xl bg-neutral-50 px-3 py-2">
+              <p className="text-neutral-500">Retensi 7 hari</p>
+              <p className="font-semibold">{parentDashboard.retention7dPct}%</p>
+            </div>
+            <div className="rounded-xl bg-neutral-50 px-3 py-2">
+              <p className="text-neutral-500">Waktu bermain</p>
+              <p className="font-semibold">
+                {parentDashboard.totalPlayMinutes} menit
+              </p>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-2 text-sm sm:grid-cols-3">
+            <div className="rounded-xl bg-primary-50 px-3 py-2">
+              <p className="text-primary-700">Aktivitas selesai</p>
+              <p className="font-semibold">
+                {parentDashboard.totalActivitiesCompleted}
+              </p>
+            </div>
+            <div className="rounded-xl bg-primary-50 px-3 py-2">
+              <p className="text-primary-700">Rata-rata bintang</p>
+              <p className="font-semibold">{parentDashboard.averageStars}★</p>
+            </div>
+            <div className="rounded-xl bg-primary-50 px-3 py-2">
+              <p className="text-primary-700">Penyelesaian level</p>
+              <p className="font-semibold">
+                {parentDashboard.levelCompletionPct}%
+              </p>
+            </div>
+          </div>
+          <div className="rounded-xl bg-neutral-50 px-3 py-2 text-sm">
+            <p className="font-medium">Analisis jalur belajar</p>
+            <p className="text-neutral-600">
+              {parentDashboard.perTrack
+                .map(
+                  (t) =>
+                    `${t.track === 'literasi' ? 'Literasi' : 'Matematika'}: ${t.averageStars}★`,
+                )
+                .join(' · ')}
+            </p>
+          </div>
+        </div>
+      ) : null}
+
+      {parentDashboard && parentDashboard.childSummaries.length > 0 ? (
+        <div className="space-y-3 rounded-2xl bg-white p-4 shadow">
+          <p className="font-bold">Manajemen Anak</p>
+          <div className="space-y-2">
+            {parentDashboard.childSummaries.map((child) => (
+              <div
+                key={child.id}
+                className="rounded-xl bg-neutral-50 px-3 py-2 text-sm"
+              >
+                <p className="font-semibold">
+                  {child.name} · {child.ageMode}
+                </p>
+                <p className="text-neutral-600">
+                  XP {child.totalXp} · aktivitas{' '}
+                  {child.totalActivitiesCompleted} · {child.totalPlayMinutes}{' '}
+                  menit · {child.averageStars}★ · level{' '}
+                  {child.levelCompletionPct}% ·{' '}
+                  {child.active7d ? 'aktif 7 hari' : 'belum aktif 7 hari'}
+                </p>
+              </div>
+            ))}
+          </div>
+          <p className="text-xs text-neutral-500">
+            Pilih tombol nama anak di atas untuk membuka laporan detail per
+            anak.
+          </p>
+        </div>
+      ) : null}
       {report ? (
         <div className="space-y-3">
           <div className="rounded-2xl bg-white p-4 shadow">
@@ -1212,7 +1354,7 @@ function ParentPage() {
               type="button"
               className="text-xs font-medium text-red-700 underline"
               onClick={async () => {
-                if (!session) return;
+                if (!session && !parentAccountLoggedIn) return;
                 setErr(null);
                 try {
                   await api.patchParentSettings(session, {
@@ -1335,7 +1477,8 @@ function ParentPage() {
           <Button
             className="w-full"
             onClick={async () => {
-              if (!session || !parentSettings) return;
+              if ((!session && !parentAccountLoggedIn) || !parentSettings)
+                return;
               setSettingsSaved(false);
               try {
                 const saved = await api.patchParentSettings(session, {
