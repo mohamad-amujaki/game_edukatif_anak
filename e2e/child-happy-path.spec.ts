@@ -35,8 +35,31 @@ test.describe('alur anak bahagia', () => {
     const childMatch = page.url().match(/\/p\/([^/?#]+)/);
     const childId = childMatch?.[1];
     if (!childId) throw new Error('Profil tidak punya ID di URL.');
-    /** Langsung ke aktivitas seed TK — menghindari status terkunci / race daftar level. */
-    await page.goto(`/p/${childId}/play/tk-literasi-1-act1`);
+    const literasiCandidates = [
+      'tk-literasi-1-act1',
+      'tk-literasi-2-act1',
+      'tk-literasi-3-act1',
+    ];
+    let pickedActivityId: string | null = null;
+    for (const id of literasiCandidates) {
+      const res = await page.request.get(
+        `/api/activities/${id}?childId=${childId}`,
+      );
+      if (!res.ok()) continue;
+      const body = (await res.json()) as {
+        data?: { type?: string };
+      };
+      if (body.data?.type === 'HURUF_GAMBAR_MATCHING') {
+        pickedActivityId = id;
+        break;
+      }
+    }
+    if (!pickedActivityId) {
+      throw new Error(
+        'Tidak menemukan aktivitas literasi HURUF_GAMBAR_MATCHING yang valid.',
+      );
+    }
+    await page.goto(`/p/${childId}/play/${pickedActivityId}`);
 
     await expect(
       page
