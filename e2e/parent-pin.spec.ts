@@ -1,7 +1,9 @@
 import { expect, test } from '@playwright/test';
+import { resetParentPinSingleton } from './helpers/reset-parent-pin';
 
 test.describe('PIN orang tua', () => {
   test.beforeEach(async ({ context }) => {
+    await resetParentPinSingleton();
     await context.clearCookies();
     await context.addInitScript(() => {
       try {
@@ -39,6 +41,10 @@ test.describe('PIN orang tua', () => {
 
     await expect(page.getByRole('heading', { name: 'Laporan' })).toBeVisible();
 
+    await page.goto('/parent');
+    await expect(
+      page.getByRole('heading', { name: 'Area orang tua' }),
+    ).toBeVisible({ timeout: 15_000 });
     await page.getByRole('button', { name: 'Ubah PIN' }).click();
 
     await page.locator('#parent-pin-current').fill('4242');

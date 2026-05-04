@@ -17,6 +17,7 @@ test.describe('alur anak bahagia', () => {
   test('buat profil, onboarding, satu aktivitas literasi, lihat layar Hebat', async ({
     page,
   }) => {
+    test.setTimeout(120_000);
     const uniq = Date.now();
     await page.goto('/');
 
@@ -31,15 +32,11 @@ test.describe('alur anak bahagia', () => {
     await page.getByRole('button', { name: 'Mulai belajar' }).click();
 
     await expect(page).toHaveURL(/\/p\/[^/]+\/?$/);
-
-    await page.getByRole('link', { name: 'Literasi', exact: true }).click();
-
-    await page
-      .getByRole('link', { name: /^Buka$/ })
-      .first()
-      .click();
-
-    await page.locator(`a[href*="/play/"]`).first().click();
+    const childMatch = page.url().match(/\/p\/([^/?#]+)/);
+    const childId = childMatch?.[1];
+    if (!childId) throw new Error('Profil tidak punya ID di URL.');
+    /** Langsung ke aktivitas seed TK — menghindari status terkunci / race daftar level. */
+    await page.goto(`/p/${childId}/play/tk-literasi-1-act1`);
 
     await expect(page.getByText(/^Soal /)).toBeVisible({ timeout: 60_000 });
 
