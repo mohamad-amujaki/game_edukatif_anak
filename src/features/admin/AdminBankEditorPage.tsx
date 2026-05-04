@@ -1,5 +1,6 @@
 import { adminApi } from '@/api-admin';
 import { Button } from '@/components/ui/Button';
+import { BankItemsPreviewGrid } from '@/features/admin/bank-item-preview';
 import { authClient } from '@/lib/auth-client';
 import { Link } from '@tanstack/react-router';
 import { useEffect, useState } from 'react';
@@ -108,6 +109,20 @@ export function AdminBankEditorPage({ activityId }: { activityId: string }) {
                 spellCheck={false}
               />
             </label>
+            <div className="mt-6 rounded-2xl border border-dashed border-primary-200 bg-primary-50/40 p-4">
+              <h2 className="text-sm font-semibold text-neutral-900">
+                Preview kartu per item (mini-game)
+              </h2>
+              <p className="mt-1 text-xs text-neutral-600">
+                Membantu QA konten tanpa bermain sebagai anak.
+              </p>
+              <div className="mt-4">
+                <BankItemsPreviewGrid
+                  activityType={activityType}
+                  itemsJson={text}
+                />
+              </div>
+            </div>
             <p className="mt-3 text-xs text-neutral-500">
               Untuk matching/susun, server menyimpan ke field{' '}
               <code className="rounded bg-neutral-100 px-1">pairs</code>; untuk

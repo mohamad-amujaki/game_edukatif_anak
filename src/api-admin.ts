@@ -324,7 +324,7 @@ export const adminApi = {
 
   async getAuditLog(query?: {
     actor?: string;
-    actorType?: 'ADMIN' | 'SUPER_PARENT';
+    actorType?: 'ADMIN' | 'SUPER_PARENT' | 'DEVICE';
     entityType?: string;
     from?: string;
     to?: string;

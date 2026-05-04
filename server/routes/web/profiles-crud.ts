@@ -1,10 +1,22 @@
 import { Hono } from 'hono';
-import { AuditActions, recordSuperParentAudit } from '../../audit';
+import {
+  AuditActions,
+  recordDeviceProfileSelfEdit,
+  recordSuperParentAudit,
+} from '../../audit';
 import { prisma } from '../../db';
+import { isParentSessionValid } from '../../parent-session';
 import { denyUnlessSuperParent } from '../../parent-super-guard';
+import { createRateLimiter } from '../../rate-limit';
 import { createProfileSchema, updateProfileSchema } from '../../schemas';
 import { initializeLevelMastery } from '../../services/mastery';
 import { jsonErr } from './shared';
+
+const ratePatchProfileSelf = createRateLimiter({
+  key: 'patch-profile-self',
+  limit: 48,
+  windowMs: 10 * 60 * 1000,
+});
 
 /** Health, daftar/CRUD profil, reset progres super-orang tua. */
 export const profilesCrudApp = new Hono();
@@ -60,34 +72,80 @@ profilesCrudApp.post('/api/profiles', async (c) => {
 });
 
 /**
- * Ubah profil dari perangkat bersama (tanpa PIN) — sama seperti membuat profil baru,
- * untuk UX pemilih pemain di beranda anak.
+ * Ubah profil dari beranda anak. Jika PIN orang tua sudah diatur, wajib header
+ * `X-Parent-Session` (setelah verifikasi di Area orang tua).
  */
-profilesCrudApp.patch('/api/profiles/:id/self', async (c) => {
-  const id = c.req.param('id');
-  const body = await c.req.json().catch(() => null);
-  const parsed = updateProfileSchema.safeParse(body);
-  if (!parsed.success)
-    return jsonErr('VALIDATION_ERROR', parsed.error.message, 400);
+profilesCrudApp.patch(
+  '/api/profiles/:id/self',
+  ratePatchProfileSelf,
+  async (c) => {
+    const id = c.req.param('id');
+    const body = await c.req.json().catch(() => null);
+    const parsed = updateProfileSchema.safeParse(body);
+    if (!parsed.success)
+      return jsonErr('VALIDATION_ERROR', parsed.error.message, 400);
 
-  const exists = await prisma.childProfile.findUnique({ where: { id } });
-  if (!exists) return jsonErr('NOT_FOUND', 'Profil tidak ada', 404);
+    const exists = await prisma.childProfile.findUnique({ where: { id } });
+    if (!exists) return jsonErr('NOT_FOUND', 'Profil tidak ada', 404);
 
-  const updated = await prisma.childProfile.update({
-    where: { id },
-    data: parsed.data,
-  });
+    const settings = await prisma.parentSettings.findUnique({
+      where: { id: 'singleton' },
+    });
+    const sessionOk = await isParentSessionValid(
+      c.req.header('X-Parent-Session'),
+    );
+    if (settings?.pinHash && !sessionOk) {
+      return jsonErr(
+        'UNAUTHORIZED',
+        'PIN orang tua aktif — buka Area orang tua, masuk dengan PIN, lalu ubah profil lagi dari beranda.',
+        401,
+      );
+    }
 
-  return c.json({
-    data: {
-      id: updated.id,
+    const updated = await prisma.childProfile.update({
+      where: { id },
+      data: parsed.data,
+    });
+
+    const before = {
+      name: exists.name,
+      avatarKey: exists.avatarKey,
+      ageMode: exists.ageMode,
+    };
+    const after = {
       name: updated.name,
       avatarKey: updated.avatarKey,
       ageMode: updated.ageMode,
-      createdAt: updated.createdAt.toISOString(),
-    },
-  });
-});
+    };
+
+    if (settings?.pinHash) {
+      await recordSuperParentAudit(c, {
+        sessionToken: c.req.header('X-Parent-Session') ?? '',
+        action: AuditActions.PROFILE_SELF_PARENT,
+        entityType: 'ChildProfile',
+        entityId: id,
+        before,
+        after,
+      });
+    } else {
+      await recordDeviceProfileSelfEdit(c, {
+        entityId: id,
+        before,
+        after,
+      });
+    }
+
+    return c.json({
+      data: {
+        id: updated.id,
+        name: updated.name,
+        avatarKey: updated.avatarKey,
+        ageMode: updated.ageMode,
+        createdAt: updated.createdAt.toISOString(),
+      },
+    });
+  },
+);
 
 profilesCrudApp.patch('/api/profiles/:id', async (c) => {
   const gate = await denyUnlessSuperParent(c);

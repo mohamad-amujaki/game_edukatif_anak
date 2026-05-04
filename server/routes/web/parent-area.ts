@@ -1,17 +1,55 @@
+import { timingSafeEqual } from 'node:crypto';
 import type { Track } from '@prisma/client';
 import { Hono } from 'hono';
 import { prisma } from '../../db';
 import { createParentSession } from '../../parent-session';
-import { hashAnswer, hashPin, verifyPin } from '../../pin';
+import { hashAnswer, hashPin, verifyAnswer, verifyPin } from '../../pin';
+import { createRateLimiter } from '../../rate-limit';
+import { hashRecoveryToken, newRecoveryToken } from '../../recovery-token';
 import {
   changePinSchema,
+  parentSettingsPatchSchema,
+  resetPinRecoverySchema,
   setupPinSchema,
   verifyPinSchema,
+  verifyRecoverySchema,
 } from '../../schemas';
 import { jsonErr, parentGuard } from './shared';
 
 /** PIN orang tua, pengaturan perangkat, laporan — dipasang di `web/index`. */
 export const parentAreaApp = new Hono();
+
+const ratePinVerify = createRateLimiter({
+  key: 'parent-verify-pin',
+  limit: 24,
+  windowMs: 15 * 60 * 1000,
+});
+const ratePinSetup = createRateLimiter({
+  key: 'parent-setup-pin',
+  limit: 12,
+  windowMs: 60 * 60 * 1000,
+});
+const ratePinChange = createRateLimiter({
+  key: 'parent-change-pin',
+  limit: 12,
+  windowMs: 60 * 60 * 1000,
+});
+const rateRecoveryVerify = createRateLimiter({
+  key: 'parent-recovery-verify',
+  limit: 10,
+  windowMs: 60 * 60 * 1000,
+});
+const rateRecoveryReset = createRateLimiter({
+  key: 'parent-recovery-reset',
+  limit: 6,
+  windowMs: 60 * 60 * 1000,
+});
+
+function maskParentEmail(email: string): string {
+  const [u, d] = email.split('@');
+  if (!d || !u) return '***';
+  return `${u.slice(0, Math.min(2, u.length))}***@${d}`;
+}
 
 parentAreaApp.get('/api/parent/pin-status', async (c) => {
   const settings = await prisma.parentSettings.findUnique({
@@ -20,7 +58,7 @@ parentAreaApp.get('/api/parent/pin-status', async (c) => {
   return c.json({ data: { pinIsSet: Boolean(settings?.pinHash) } });
 });
 
-parentAreaApp.post('/api/parent/setup-pin', async (c) => {
+parentAreaApp.post('/api/parent/setup-pin', ratePinSetup, async (c) => {
   const body = await c.req.json().catch(() => null);
   const parsed = setupPinSchema.safeParse(body);
   if (!parsed.success)
@@ -49,7 +87,7 @@ parentAreaApp.post('/api/parent/setup-pin', async (c) => {
     },
   });
 
-  const token = createParentSession();
+  const token = await createParentSession();
   const expiresAt = new Date(Date.now() + 30 * 60 * 1000).toISOString();
   return c.json(
     { data: { ok: true as const, sessionToken: token, expiresAt } },
@@ -57,7 +95,7 @@ parentAreaApp.post('/api/parent/setup-pin', async (c) => {
   );
 });
 
-parentAreaApp.post('/api/parent/change-pin', async (c) => {
+parentAreaApp.post('/api/parent/change-pin', ratePinChange, async (c) => {
   const body = await c.req.json().catch(() => null);
   const parsed = changePinSchema.safeParse(body);
   if (!parsed.success)
@@ -84,7 +122,7 @@ parentAreaApp.post('/api/parent/change-pin', async (c) => {
     },
   });
 
-  const token = createParentSession();
+  const token = await createParentSession();
   const expiresAt = new Date(Date.now() + 30 * 60 * 1000).toISOString();
   return c.json(
     { data: { ok: true as const, sessionToken: token, expiresAt } },
@@ -92,7 +130,7 @@ parentAreaApp.post('/api/parent/change-pin', async (c) => {
   );
 });
 
-parentAreaApp.post('/api/parent/verify-pin', async (c) => {
+parentAreaApp.post('/api/parent/verify-pin', ratePinVerify, async (c) => {
   const body = await c.req.json().catch(() => null);
   const parsed = verifyPinSchema.safeParse(body);
   if (!parsed.success)
@@ -107,14 +145,114 @@ parentAreaApp.post('/api/parent/verify-pin', async (c) => {
   const ok = await verifyPin(parsed.data.pin, settings.pinHash);
   if (!ok) return jsonErr('PIN_INCORRECT', 'PIN salah', 403);
 
-  const token = createParentSession();
+  const token = await createParentSession();
   const expiresAt = new Date(Date.now() + 30 * 60 * 1000).toISOString();
   return c.json({ data: { sessionToken: token, expiresAt } });
 });
 
+parentAreaApp.get('/api/parent/recovery-question', async (c) => {
+  const settings = await prisma.parentSettings.findUnique({
+    where: { id: 'singleton' },
+  });
+  if (!settings?.pinHash || !settings.pinSetupQuestion)
+    return jsonErr('PIN_NOT_SET', 'PIN belum diatur', 400);
+  return c.json({
+    data: { question: settings.pinSetupQuestion },
+  });
+});
+
+parentAreaApp.post(
+  '/api/parent/verify-recovery',
+  rateRecoveryVerify,
+  async (c) => {
+    const body = await c.req.json().catch(() => null);
+    const parsed = verifyRecoverySchema.safeParse(body);
+    if (!parsed.success)
+      return jsonErr('VALIDATION_ERROR', parsed.error.message, 400);
+
+    const settings = await prisma.parentSettings.findUnique({
+      where: { id: 'singleton' },
+    });
+    if (!settings?.pinHash || !settings.pinSetupAnswerHash)
+      return jsonErr('PIN_NOT_SET', 'PIN belum diatur', 400);
+
+    const ok = await verifyAnswer(
+      parsed.data.recoveryAnswer,
+      settings.pinSetupAnswerHash,
+    );
+    if (!ok)
+      return jsonErr('RECOVERY_INCORRECT', 'Jawaban pemulihan salah', 403);
+
+    const token = newRecoveryToken();
+    const tokenHash = hashRecoveryToken(token);
+    const expires = new Date(Date.now() + 15 * 60 * 1000);
+    await prisma.parentSettings.update({
+      where: { id: 'singleton' },
+      data: {
+        pinRecoveryTokenHash: tokenHash,
+        pinRecoveryTokenExpires: expires,
+      },
+    });
+
+    return c.json({
+      data: {
+        recoveryToken: token,
+        recoveryTokenExpiresAt: expires.toISOString(),
+      },
+    });
+  },
+);
+
+parentAreaApp.post(
+  '/api/parent/reset-pin-with-recovery',
+  rateRecoveryReset,
+  async (c) => {
+    const body = await c.req.json().catch(() => null);
+    const parsed = resetPinRecoverySchema.safeParse(body);
+    if (!parsed.success)
+      return jsonErr('VALIDATION_ERROR', parsed.error.message, 400);
+
+    const settings = await prisma.parentSettings.findUnique({
+      where: { id: 'singleton' },
+    });
+    if (!settings?.pinRecoveryTokenHash || !settings.pinRecoveryTokenExpires)
+      return jsonErr('RECOVERY_EXPIRED', 'Token pemulihan tidak valid', 400);
+    if (settings.pinRecoveryTokenExpires.getTime() < Date.now())
+      return jsonErr('RECOVERY_EXPIRED', 'Token pemulihan kedaluwarsa', 400);
+
+    const want = hashRecoveryToken(parsed.data.recoveryToken);
+    const got = settings.pinRecoveryTokenHash;
+    const a = Buffer.from(want, 'utf8');
+    const b = Buffer.from(got, 'utf8');
+    if (a.length !== b.length || !timingSafeEqual(a, b))
+      return jsonErr('RECOVERY_INCORRECT', 'Token pemulihan tidak valid', 403);
+
+    const pinHash = await hashPin(parsed.data.pin);
+    const answerHash = await hashAnswer(parsed.data.recoveryAnswer);
+
+    await prisma.parentSettings.update({
+      where: { id: 'singleton' },
+      data: {
+        pinHash,
+        pinSetupQuestion: parsed.data.recoveryQuestion,
+        pinSetupAnswerHash: answerHash,
+        pinRecoveryTokenHash: null,
+        pinRecoveryTokenExpires: null,
+      },
+    });
+
+    const sessionToken = await createParentSession();
+    const expiresAt = new Date(Date.now() + 30 * 60 * 1000).toISOString();
+    return c.json(
+      { data: { ok: true as const, sessionToken, expiresAt } },
+      200,
+    );
+  },
+);
+
 parentAreaApp.get('/api/parent/settings', async (c) => {
   const token = c.req.header('X-Parent-Session');
-  if (!parentGuard(token))
+  if (!(await parentGuard(token)))
     return jsonErr('UNAUTHORIZED', 'Butuh sesi orang tua', 401);
 
   const s = await prisma.parentSettings.findUnique({
@@ -128,42 +266,68 @@ parentAreaApp.get('/api/parent/settings', async (c) => {
       sfxEnabled: s?.sfxEnabled ?? true,
       reduceMotion: s?.reduceMotion ?? false,
       isSuperParent: s?.isSuperParent ?? false,
+      parentEmailMasked:
+        s?.parentEmail?.includes('@') === true
+          ? maskParentEmail(s.parentEmail)
+          : null,
+      weeklyEmailOptIn: s?.weeklyEmailOptIn ?? false,
     },
   });
 });
 
 parentAreaApp.put('/api/parent/settings', async (c) => {
   const token = c.req.header('X-Parent-Session');
-  if (!parentGuard(token))
+  if (!(await parentGuard(token)))
     return jsonErr('UNAUTHORIZED', 'Butuh sesi orang tua', 401);
 
-  const body = await c.req.json().catch(() => ({}));
+  const raw = await c.req.json().catch(() => ({}));
+  const parsed = parentSettingsPatchSchema.safeParse(raw);
+  if (!parsed.success)
+    return jsonErr('VALIDATION_ERROR', parsed.error.message, 400);
+  const patch = parsed.data;
+
+  const emailUpdate =
+    patch.parentEmail === undefined
+      ? {}
+      : {
+          parentEmail:
+            patch.parentEmail === '' || patch.parentEmail === null
+              ? null
+              : patch.parentEmail,
+        };
+
   const updated = await prisma.parentSettings.upsert({
     where: { id: 'singleton' },
     create: {
       id: 'singleton',
-      dailyTimeCapMinutes: Number(body.dailyTimeCapMinutes) || 30,
-      breakReminderMinutes: Number(body.breakReminderMinutes) || 15,
-      musicEnabled: Boolean(body.musicEnabled ?? true),
-      sfxEnabled: Boolean(body.sfxEnabled ?? true),
-      reduceMotion: Boolean(body.reduceMotion ?? false),
+      dailyTimeCapMinutes: patch.dailyTimeCapMinutes ?? 30,
+      breakReminderMinutes: patch.breakReminderMinutes ?? 15,
+      musicEnabled: patch.musicEnabled ?? true,
+      sfxEnabled: patch.sfxEnabled ?? true,
+      reduceMotion: patch.reduceMotion ?? false,
+      weeklyEmailOptIn: patch.weeklyEmailOptIn ?? false,
+      ...emailUpdate,
     },
     update: {
-      ...(typeof body.dailyTimeCapMinutes === 'number'
-        ? { dailyTimeCapMinutes: body.dailyTimeCapMinutes }
+      ...(patch.dailyTimeCapMinutes !== undefined
+        ? { dailyTimeCapMinutes: patch.dailyTimeCapMinutes }
         : {}),
-      ...(typeof body.breakReminderMinutes === 'number'
-        ? { breakReminderMinutes: body.breakReminderMinutes }
+      ...(patch.breakReminderMinutes !== undefined
+        ? { breakReminderMinutes: patch.breakReminderMinutes }
         : {}),
-      ...(typeof body.musicEnabled === 'boolean'
-        ? { musicEnabled: body.musicEnabled }
+      ...(patch.musicEnabled !== undefined
+        ? { musicEnabled: patch.musicEnabled }
         : {}),
-      ...(typeof body.sfxEnabled === 'boolean'
-        ? { sfxEnabled: body.sfxEnabled }
+      ...(patch.sfxEnabled !== undefined
+        ? { sfxEnabled: patch.sfxEnabled }
         : {}),
-      ...(typeof body.reduceMotion === 'boolean'
-        ? { reduceMotion: body.reduceMotion }
+      ...(patch.reduceMotion !== undefined
+        ? { reduceMotion: patch.reduceMotion }
         : {}),
+      ...(patch.weeklyEmailOptIn !== undefined
+        ? { weeklyEmailOptIn: patch.weeklyEmailOptIn }
+        : {}),
+      ...emailUpdate,
     },
   });
 
@@ -174,13 +338,18 @@ parentAreaApp.put('/api/parent/settings', async (c) => {
       musicEnabled: updated.musicEnabled,
       sfxEnabled: updated.sfxEnabled,
       reduceMotion: updated.reduceMotion,
+      parentEmailMasked:
+        updated.parentEmail?.includes('@') === true
+          ? maskParentEmail(updated.parentEmail)
+          : null,
+      weeklyEmailOptIn: updated.weeklyEmailOptIn,
     },
   });
 });
 
 parentAreaApp.get('/api/parent/report/:childId', async (c) => {
   const token = c.req.header('X-Parent-Session');
-  if (!parentGuard(token))
+  if (!(await parentGuard(token)))
     return jsonErr('UNAUTHORIZED', 'Butuh sesi orang tua', 401);
 
   const childId = c.req.param('childId');
@@ -189,55 +358,124 @@ parentAreaApp.get('/api/parent/report/:childId', async (c) => {
   });
   if (!child) return jsonErr('NOT_FOUND', 'Profil tidak ada', 404);
 
-  const xp = await prisma.xpLog.aggregate({
-    where: { childId },
-    _sum: { amount: true },
-  });
-  const prog = await prisma.progress.findMany({ where: { childId } });
-  const totalStars = prog.reduce((a, p) => a + p.bestStars, 0);
-  const activityDone = prog.filter((p) => p.firstCompletedAt).length;
-  const streak = await prisma.dailyStreak.findUnique({ where: { childId } });
-
-  const tracks: Track[] = ['literasi', 'math'];
-  const perTrack = [];
-  for (const track of tracks) {
-    const masterCount = await prisma.levelMastery.count({
+  const [xp, prog, streak, actRows, masterRows, badges] = await Promise.all([
+    prisma.xpLog.aggregate({
+      where: { childId },
+      _sum: { amount: true },
+    }),
+    prisma.progress.findMany({
+      where: { childId },
+      include: {
+        activity: {
+          select: {
+            id: true,
+            title: true,
+            level: { select: { track: true } },
+          },
+        },
+      },
+      orderBy: [{ bestStars: 'asc' }, { lastPlayedAt: 'desc' }],
+    }),
+    prisma.dailyStreak.findUnique({ where: { childId } }),
+    prisma.activityDefinition.findMany({
+      where: { level: { ageMode: child.ageMode } },
+      select: { id: true, level: { select: { track: true } } },
+    }),
+    prisma.levelMastery.findMany({
       where: {
         childId,
         isMastered: true,
-        level: { track, ageMode: child.ageMode },
+        level: { ageMode: child.ageMode },
       },
-    });
-    const acts = await prisma.activityDefinition.findMany({
-      where: { level: { track, ageMode: child.ageMode } },
-    });
-    const doneActs = await prisma.progress.count({
-      where: {
-        childId,
-        activityId: { in: acts.map((a) => a.id) },
-        firstCompletedAt: { not: null },
-      },
-    });
-    const starsIn = prog.filter((p) => acts.some((a) => a.id === p.activityId));
+      include: { level: { select: { track: true } } },
+    }),
+    prisma.earnedBadge.findMany({
+      where: { childId },
+      orderBy: { earnedAt: 'desc' },
+      take: 10,
+      include: { badge: true },
+    }),
+  ]);
+
+  const totalStars = prog.reduce((a, p) => a + p.bestStars, 0);
+  const activityDone = prog.filter((p) => p.firstCompletedAt).length;
+
+  const tracks: Track[] = ['literasi', 'math'];
+  const masteredByTrack: Record<Track, number> = {
+    literasi: 0,
+    math: 0,
+  };
+  for (const m of masterRows) {
+    masteredByTrack[m.level.track]++;
+  }
+
+  const perTrack = tracks.map((track) => {
+    const actIds = new Set(
+      actRows.filter((a) => a.level.track === track).map((a) => a.id),
+    );
+    const starsIn = prog.filter((p) => actIds.has(p.activityId));
     const avg =
       starsIn.length === 0
         ? 0
         : starsIn.reduce((s, p) => s + p.bestStars, 0) / starsIn.length;
-
-    perTrack.push({
+    const doneActs = prog.filter(
+      (p) => actIds.has(p.activityId) && p.firstCompletedAt,
+    ).length;
+    return {
       track,
-      levelsMastered: masterCount,
+      levelsMastered: masteredByTrack[track],
       activitiesCompleted: doneActs,
       averageStars: Math.round(avg * 10) / 10,
+    };
+  });
+
+  const replayRecommendations: Array<{
+    activityId: string;
+    title: string;
+    track: Track;
+    bestStars: number;
+  }> = [];
+  const seenRec = new Set<string>();
+  for (const p of prog) {
+    if (p.bestStars >= 3) continue;
+    if (seenRec.has(p.activityId)) continue;
+    seenRec.add(p.activityId);
+    replayRecommendations.push({
+      activityId: p.activity.id,
+      title: p.activity.title,
+      track: p.activity.level.track,
+      bestStars: p.bestStars,
     });
+    if (replayRecommendations.length >= 3) break;
   }
 
-  const badges = await prisma.earnedBadge.findMany({
-    where: { childId },
-    orderBy: { earnedAt: 'desc' },
-    take: 10,
-    include: { badge: true },
-  });
+  if (replayRecommendations.length < 3) {
+    const unlocked = await prisma.levelMastery.findMany({
+      where: { childId, isUnlocked: true },
+      select: { levelId: true },
+    });
+    const levelIds = [...new Set(unlocked.map((u) => u.levelId))];
+    const moreActs = await prisma.activityDefinition.findMany({
+      where: { levelId: { in: levelIds }, level: { ageMode: child.ageMode } },
+      select: { id: true, title: true, level: { select: { track: true } } },
+      orderBy: { order: 'asc' },
+    });
+    const progByAct = new Map(prog.map((row) => [row.activityId, row]));
+    for (const a of moreActs) {
+      if (replayRecommendations.length >= 3) break;
+      if (seenRec.has(a.id)) continue;
+      const pr = progByAct.get(a.id);
+      const stars = pr?.bestStars ?? 0;
+      if (stars >= 3) continue;
+      seenRec.add(a.id);
+      replayRecommendations.push({
+        activityId: a.id,
+        title: a.title,
+        track: a.level.track,
+        bestStars: stars,
+      });
+    }
+  }
 
   return c.json({
     data: {
@@ -257,6 +495,7 @@ parentAreaApp.get('/api/parent/report/:childId', async (c) => {
         longest: streak?.longestStreak ?? 0,
       },
       perTrack,
+      replayRecommendations,
       recentBadges: badges.map((b) => ({
         name: b.badge.name,
         iconPath: b.badge.iconPath,

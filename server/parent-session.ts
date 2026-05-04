@@ -1,26 +1,45 @@
 import crypto from 'node:crypto';
-
-const tokens = new Map<string, number>(); // token -> expiresAt ms
+import { prisma } from './db';
 
 const TTL_MS = 30 * 60 * 1000;
 
-export function createParentSession(): string {
+export async function createParentSession(): Promise<string> {
   const token = crypto.randomBytes(32).toString('hex');
-  tokens.set(token, Date.now() + TTL_MS);
+  const expiresAt = new Date(Date.now() + TTL_MS);
+  await prisma.$transaction([
+    prisma.parentSession.deleteMany({
+      where: { expiresAt: { lt: new Date() } },
+    }),
+    prisma.parentSession.create({
+      data: { token, expiresAt },
+    }),
+  ]);
   return token;
 }
 
-export function isParentSessionValid(token: string | undefined): boolean {
+export async function isParentSessionValid(
+  token: string | undefined,
+): Promise<boolean> {
   if (!token) return false;
-  const exp = tokens.get(token);
-  if (!exp || Date.now() > exp) {
-    tokens.delete(token);
+  const row = await prisma.parentSession.findUnique({
+    where: { token },
+  });
+  const now = new Date();
+  if (!row || row.expiresAt < now) {
+    if (row) {
+      await prisma.parentSession.delete({ where: { token } }).catch(() => {
+        /* race */
+      });
+    }
     return false;
   }
-  tokens.set(token, Date.now() + TTL_MS); // slide expiry
+  await prisma.parentSession.update({
+    where: { token },
+    data: { expiresAt: new Date(Date.now() + TTL_MS) },
+  });
   return true;
 }
 
-export function revokeParentSession(token: string): void {
-  tokens.delete(token);
+export async function revokeParentSession(token: string): Promise<void> {
+  await prisma.parentSession.deleteMany({ where: { token } });
 }

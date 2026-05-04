@@ -28,7 +28,17 @@ export function LoginPage() {
             'Gagal masuk. Periksa kembali email dan password.',
         );
       } else {
-        navigate({ to: '/admin' });
+        const d = res.data;
+        const need =
+          d &&
+          typeof d === 'object' &&
+          'twoFactorRedirect' in d &&
+          Boolean((d as { twoFactorRedirect?: boolean }).twoFactorRedirect);
+        if (need) {
+          navigate({ to: '/admin/two-factor' });
+        } else {
+          navigate({ to: '/admin' });
+        }
       }
     } catch (err) {
       setError('Terjadi kesalahan sistem.');

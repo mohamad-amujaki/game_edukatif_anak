@@ -1,5 +1,6 @@
 import type { DevicePreferences } from '@/lib/game-feedback-sync';
 import { hcApi, unwrapData } from '@/lib/hono-client';
+import type { ActivityVoiceOverPayload } from '@server/schemas';
 
 export type ApiError = { code: string; message: string };
 
@@ -24,11 +25,15 @@ export const api = {
   patchProfileSelf: async (
     id: string,
     body: Partial<{ name: string; avatarKey: string; ageMode: 'TK' | 'SD1' }>,
+    opts?: { parentSessionToken?: string | null },
   ) =>
     unwrapData<ProfileRow>(
       await hcApi.api.profiles[':id'].self.$patch({
         param: { id },
         json: body,
+        ...(opts?.parentSessionToken
+          ? { header: { 'X-Parent-Session': opts.parentSessionToken } }
+          : {}),
       }),
     ),
 
@@ -77,18 +82,20 @@ export const api = {
       }),
     ),
 
-  getActivity: async (activityId: string) =>
+  getActivity: async (activityId: string, childId?: string) =>
     unwrapData<{
       id: string;
       type: string;
       title: string;
       estimatedSec: number;
       payload: unknown;
-      voiceOverKeys: { instruksi: string };
+      voiceOverKeys: ActivityVoiceOverPayload;
       level: { id: string; title: string; track: string };
+      sessionQuestionCount?: number;
     }>(
       await hcApi.api.activities[':id'].$get({
         param: { id: activityId },
+        ...(childId ? { query: { childId } } : {}),
       }),
     ),
 
@@ -154,6 +161,8 @@ export const api = {
       sfxEnabled: boolean;
       reduceMotion: boolean;
       isSuperParent: boolean;
+      parentEmailMasked: string | null;
+      weeklyEmailOptIn: boolean;
     }>(
       await hcApi.api.parent.settings.$get({
         header: { 'X-Parent-Session': token },
@@ -168,6 +177,8 @@ export const api = {
       musicEnabled: boolean;
       sfxEnabled: boolean;
       reduceMotion: boolean;
+      parentEmail: string | null;
+      weeklyEmailOptIn: boolean;
     }>,
   ) =>
     unwrapData<{
@@ -176,9 +187,38 @@ export const api = {
       musicEnabled: boolean;
       sfxEnabled: boolean;
       reduceMotion: boolean;
+      parentEmailMasked: string | null;
+      weeklyEmailOptIn: boolean;
     }>(
       await hcApi.api.parent.settings.$put({
         header: { 'X-Parent-Session': token },
+        json: body,
+      }),
+    ),
+
+  getRecoveryQuestion: async () =>
+    unwrapData<{ question: string }>(
+      await hcApi.api.parent['recovery-question'].$get(),
+    ),
+
+  verifyRecoveryAnswer: async (recoveryAnswer: string) =>
+    unwrapData<{
+      recoveryToken: string;
+      recoveryTokenExpiresAt: string;
+    }>(
+      await hcApi.api.parent['verify-recovery'].$post({
+        json: { recoveryAnswer },
+      }),
+    ),
+
+  resetPinWithRecovery: async (body: {
+    recoveryToken: string;
+    pin: string;
+    recoveryQuestion: string;
+    recoveryAnswer: string;
+  }) =>
+    unwrapData<{ ok: true; sessionToken: string; expiresAt: string }>(
+      await hcApi.api.parent['reset-pin-with-recovery'].$post({
         json: body,
       }),
     ),

@@ -4,6 +4,7 @@ import { Hono } from 'hono';
 import { requireAdminRole } from './admin-middleware';
 import { AuditActions, recordAudit } from './audit';
 import { getBankSlice, validateBankItems } from './bank-validation';
+import { csvRow, csvWithBom } from './csv-export';
 import { prisma } from './db';
 import {
   activityUpdateSchema,
@@ -66,6 +67,81 @@ admin.get('/children', async (c) => {
   });
 
   return c.json({ data: list });
+});
+
+admin.get('/export/children.csv', async (c) => {
+  const rows = await prisma.childProfile.findMany({
+    orderBy: { createdAt: 'desc' },
+  });
+  const header = csvRow([
+    'id',
+    'name',
+    'avatarKey',
+    'ageMode',
+    'createdAt',
+    'updatedAt',
+  ]);
+  const lines = [header];
+  for (const r of rows) {
+    lines.push(
+      csvRow([
+        r.id,
+        r.name,
+        r.avatarKey,
+        r.ageMode,
+        r.createdAt.toISOString(),
+        r.updatedAt.toISOString(),
+      ]),
+    );
+  }
+  const body = csvWithBom(`${lines.join('\n')}\n`);
+  c.header('Content-Type', 'text/csv; charset=utf-8');
+  c.header('Content-Disposition', 'attachment; filename="children.csv"');
+  return c.body(body);
+});
+
+admin.get('/export/audit.csv', requireAdminRole(superAdminOnly), async (c) => {
+  const logs = await prisma.auditLog.findMany({
+    orderBy: { createdAt: 'desc' },
+    take: 25_000,
+  });
+  const header = csvRow([
+    'id',
+    'createdAt',
+    'actorType',
+    'actorId',
+    'actorEmail',
+    'action',
+    'entityType',
+    'entityId',
+    'beforeJson',
+    'afterJson',
+    'ipAddress',
+    'userAgent',
+  ]);
+  const lines = [header];
+  for (const r of logs) {
+    lines.push(
+      csvRow([
+        r.id,
+        r.createdAt.toISOString(),
+        r.actorType,
+        r.actorId,
+        r.actorEmail ?? '',
+        r.action,
+        r.entityType,
+        r.entityId,
+        r.beforeJson ?? '',
+        r.afterJson ?? '',
+        r.ipAddress ?? '',
+        r.userAgent ?? '',
+      ]),
+    );
+  }
+  const body = csvWithBom(`${lines.join('\n')}\n`);
+  c.header('Content-Type', 'text/csv; charset=utf-8');
+  c.header('Content-Disposition', 'attachment; filename="audit.csv"');
+  return c.body(body);
 });
 
 admin.get('/children/:id', async (c) => {

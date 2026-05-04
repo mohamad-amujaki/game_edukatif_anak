@@ -1,6 +1,9 @@
 import './boot-env';
 import { serve } from '@hono/node-server';
 import { app } from './app';
+import { captureServerException, initSentryFromEnv } from './sentry';
+
+initSentryFromEnv();
 
 /** Fly/Railway menyetel `PORT` ke `internal_port` (8080). Fallback prod → 8080, dev → 3000. */
 function listenPort(): number {
@@ -29,6 +32,7 @@ server.on('error', (err: NodeJS.ErrnoException) => {
     );
   } else {
     console.error('[api]', err);
+    captureServerException(err);
   }
   process.exit(1);
 });

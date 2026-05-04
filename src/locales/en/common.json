@@ -1,0 +1,16 @@
+{
+  "nav": {
+    "parent": "Parents",
+    "language": "Language"
+  },
+  "home": {
+    "heroTitle": "Start your learning adventure",
+    "heroSubtitle": "Pick a player, adjust the profile, then play!",
+    "welcomeBack": "Good to see you again! Visit #{{count}}",
+    "whoPlays": "Who is playing?",
+    "continuePlay": "Continue playing",
+    "continueHint": "Opens the dashboard for the selected profile.",
+    "addPlayer": "Add player",
+    "addPlayerCaption": "Max. {{max}} profiles"
+  }
+}

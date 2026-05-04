@@ -1,0 +1,16 @@
+{
+  "nav": {
+    "parent": "Orang tua",
+    "language": "Bahasa"
+  },
+  "home": {
+    "heroTitle": "Mulai petualangan belajar",
+    "heroSubtitle": "Pilih pemain, sesuaikan profil, lalu gas main!",
+    "welcomeBack": "Senang bertemu lagi! Kunjungan ke-{{count}}",
+    "whoPlays": "Siapa yang bermain?",
+    "continuePlay": "Lanjut bermain",
+    "continueHint": "Membuka dashboard dengan profil yang dipilih.",
+    "addPlayer": "Tambah pemain",
+    "addPlayerCaption": "Maks. {{max}} profil"
+  }
+}

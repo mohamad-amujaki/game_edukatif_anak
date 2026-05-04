@@ -22,6 +22,8 @@ export const AuditActions = {
   IMPORT_RUN: 'import.run',
   EXPORT_RUN: 'export.run',
   PARENT_SUPER_FLAG_UPDATE: 'parent.super-flag.update',
+  PROFILE_SELF_DEVICE: 'child.profile-self.device',
+  PROFILE_SELF_PARENT: 'child.profile-self.parent',
 } as const;
 
 /** Jejak aksi super-orang tua (PIN); actorId = hash sesi (tanpa menyimpan token mentah). */
@@ -54,6 +56,41 @@ export async function recordSuperParentAudit(
       ipAddress:
         c.req.header('x-forwarded-for') ?? c.req.header('remote-addr') ?? null,
       userAgent: c.req.header('user-agent') ?? null,
+    },
+  });
+}
+
+/** Jejak ringan PATCH profil dari perangkat saat PIN belum diatur (tanpa sesi orang tua). */
+export async function recordDeviceProfileSelfEdit(
+  c: Context,
+  params: {
+    entityId: string;
+    before: unknown;
+    after: unknown;
+  },
+) {
+  const ip =
+    c.req.header('x-forwarded-for')?.split(',')[0]?.trim() ??
+    c.req.header('remote-addr') ??
+    '';
+  const ua = c.req.header('user-agent') ?? '';
+  const actorId = createHash('sha256')
+    .update(`${ip}|${ua}|${params.entityId}`)
+    .digest('hex')
+    .slice(0, 32);
+
+  await prisma.auditLog.create({
+    data: {
+      actorType: 'DEVICE',
+      actorId,
+      actorEmail: null,
+      action: AuditActions.PROFILE_SELF_DEVICE,
+      entityType: 'ChildProfile',
+      entityId: params.entityId,
+      beforeJson: JSON.stringify(params.before),
+      afterJson: JSON.stringify(params.after),
+      ipAddress: ip || null,
+      userAgent: ua || null,
     },
   });
 }

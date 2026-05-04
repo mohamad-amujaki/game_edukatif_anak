@@ -1,11 +1,13 @@
 import { type ProfileRow, api } from '@/api';
 import { Button } from '@/components/ui/Button';
 import { BRAND_APP } from '@/lib/brand';
-import { lastChildIdAtom } from '@/state/atoms';
+import { lastChildIdAtom, parentSessionAtom } from '@/state/atoms';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from '@tanstack/react-router';
 import confetti from 'canvas-confetti';
 import { useAtom } from 'jotai/react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 
 const AVATARS = [
   'panda',
@@ -40,15 +42,22 @@ function ageLabel(mode: string): string {
 }
 
 export function HomeLanding() {
+  const { t } = useTranslation('common');
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [, setLast] = useAtom(lastChildIdAtom);
+  const [parentSession] = useAtom(parentSessionAtom);
   const [name, setName] = useState('');
   const [avatarKey, setAvatarKey] = useState<string>(AVATARS[0]);
   const [ageMode, setAgeMode] = useState<'TK' | 'SD1'>('TK');
   const [err, setErr] = useState<string | null>(null);
   const [visitCount, setVisitCount] = useState<number | null>(null);
-  const [profiles, setProfiles] = useState<ProfileRow[]>([]);
-  const [loadingProfiles, setLoadingProfiles] = useState(true);
+  const { data: profilesRaw, isPending: loadingProfiles } = useQuery({
+    queryKey: ['profiles'],
+    queryFn: () => api.getProfiles(),
+    retry: 1,
+  });
+  const profiles: ProfileRow[] = profilesRaw ?? [];
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [showNewProfile, setShowNewProfile] = useState(false);
   const [editing, setEditing] = useState<ProfileRow | null>(null);
@@ -57,26 +66,11 @@ export function HomeLanding() {
   const [editMode, setEditMode] = useState<'TK' | 'SD1'>('TK');
   const [editErr, setEditErr] = useState<string | null>(null);
   const [savingEdit, setSavingEdit] = useState(false);
+  const editDialogRef = useRef<HTMLDialogElement>(null);
 
-  const refreshProfiles = useCallback(() => {
-    return api
-      .getProfiles()
-      .then((rows) => {
-        setProfiles(rows);
-        setSelectedId((prev) => {
-          if (prev && rows.some((r) => r.id === prev)) return prev;
-          return rows[0]?.id ?? null;
-        });
-        if (rows.length === 0) {
-          setShowNewProfile(true);
-        }
-      })
-      .catch(() => {
-        setProfiles([]);
-        setSelectedId(null);
-      })
-      .finally(() => setLoadingProfiles(false));
-  }, []);
+  const refreshProfiles = useCallback(async () => {
+    await queryClient.invalidateQueries({ queryKey: ['profiles'] });
+  }, [queryClient]);
 
   useEffect(() => {
     try {
@@ -89,8 +83,14 @@ export function HomeLanding() {
   }, []);
 
   useEffect(() => {
-    void refreshProfiles();
-  }, [refreshProfiles]);
+    setSelectedId((prev) => {
+      if (prev && profiles.some((r) => r.id === prev)) return prev;
+      return profiles[0]?.id ?? null;
+    });
+    if (profiles.length === 0) {
+      setShowNewProfile(true);
+    }
+  }, [profiles]);
 
   const readinessPct = useMemo(() => {
     let pct = 40;
@@ -114,11 +114,21 @@ export function HomeLanding() {
 
   useEffect(() => {
     if (!editing) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') closeEdit();
+    const el = editDialogRef.current;
+    if (!el) return;
+
+    const onDialogClose = () => {
+      closeEdit();
     };
-    globalThis.addEventListener('keydown', onKey);
-    return () => globalThis.removeEventListener('keydown', onKey);
+    el.addEventListener('close', onDialogClose);
+    el.showModal();
+    window.requestAnimationFrame(() => {
+      document.getElementById('edit-name')?.focus?.();
+    });
+    return () => {
+      el.removeEventListener('close', onDialogClose);
+      el.close();
+    };
   }, [editing, closeEdit]);
 
   const saveEdit = async () => {
@@ -126,11 +136,15 @@ export function HomeLanding() {
     setEditErr(null);
     setSavingEdit(true);
     try {
-      const updated = await api.patchProfileSelf(editing.id, {
-        name: editName.trim() || editing.name,
-        avatarKey: editAvatar,
-        ageMode: editMode,
-      });
+      const updated = await api.patchProfileSelf(
+        editing.id,
+        {
+          name: editName.trim() || editing.name,
+          avatarKey: editAvatar,
+          ageMode: editMode,
+        },
+        { parentSessionToken: parentSession },
+      );
       await refreshProfiles();
       if (selectedId === editing.id) setLast(updated.id);
       closeEdit();
@@ -184,14 +198,14 @@ export function HomeLanding() {
           <span aria-hidden>🎯</span> {BRAND_APP}
         </p>
         <p className="mt-4 font-[family-name:var(--font-display)] text-2xl font-bold text-[var(--color-primary-600)] sm:text-3xl">
-          Mulai petualangan belajar
+          {t('home.heroTitle')}
         </p>
         <p className="mt-2 text-balance text-lg text-neutral-700 sm:text-xl">
-          Pilih pemain, sesuaikan profil, lalu gas main!
+          {t('home.heroSubtitle')}
         </p>
         {visitCount !== null && visitCount > 1 ? (
           <p className="mt-3 text-sm font-medium text-primary-800">
-            Senang bertemu lagi! Kunjungan ke-{visitCount}{' '}
+            {t('home.welcomeBack', { count: visitCount })}{' '}
             <span aria-hidden>✨</span>
           </p>
         ) : null}
@@ -203,7 +217,7 @@ export function HomeLanding() {
             id="players-heading"
             className="font-[family-name:var(--font-display)] text-xl font-bold text-neutral-900 sm:text-2xl"
           >
-            Siapa yang bermain?
+            {t('home.whoPlays')}
           </h2>
           {loadingProfiles ? (
             <span className="text-sm text-neutral-400">Memuat…</span>
@@ -285,10 +299,10 @@ export function HomeLanding() {
                     +
                   </span>
                   <span className="mt-2 text-sm font-bold text-primary-800">
-                    Tambah pemain
+                    {t('home.addPlayer')}
                   </span>
                   <span className="mt-1 text-xs text-primary-700/80">
-                    Maks. {MAX_PROFILES} profil
+                    {t('home.addPlayerCaption', { max: MAX_PROFILES })}
                   </span>
                 </button>
               ) : null}
@@ -300,10 +314,10 @@ export function HomeLanding() {
                 disabled={!selectedId}
                 onClick={continuePlay}
               >
-                Lanjut bermain
+                {t('home.continuePlay')}
               </Button>
               <p className="mt-2 text-center text-xs text-neutral-500">
-                Membuka dashboard dengan profil yang dipilih.
+                {t('home.continueHint')}
               </p>
             </div>
           </>
@@ -442,7 +456,7 @@ export function HomeLanding() {
 
       {editing ? (
         <dialog
-          open
+          ref={editDialogRef}
           className="fixed inset-0 z-50 m-0 flex h-full max-h-none w-full max-w-none items-end justify-center border-0 bg-black/45 p-4 backdrop:bg-transparent sm:items-center sm:p-6"
           aria-labelledby="edit-profile-title"
         >
@@ -482,6 +496,8 @@ export function HomeLanding() {
                     key={a}
                     className={`rounded-xl border-2 p-2 text-3xl ${editAvatar === a ? 'border-primary-500 ring-2 ring-primary-200' : 'border-transparent'}`}
                     onClick={() => setEditAvatar(a)}
+                    aria-pressed={editAvatar === a}
+                    aria-label={`Pilih avatar ${a}`}
                   >
                     {emojiAvatar(a)}
                   </button>

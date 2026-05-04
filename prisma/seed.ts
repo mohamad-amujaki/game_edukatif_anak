@@ -21,9 +21,21 @@ const vo = (instruksi: string) =>
   JSON.stringify({
     instruksi,
     correct: ['/audio/feedback/great-1.mp3'],
-    wrong: ['/audio/feedback/try-1.mp3'],
+    wrong: ['/audio/wrong-soft.mp3', '/audio/feedback/try-1.mp3'],
     completion: '/audio/feedback/done.mp3',
   });
+
+function voiceOverJsonForSeedRow(
+  description: string,
+  activity: { title: string; payload: object },
+): string {
+  const payload = activity.payload as { instruction?: string };
+  const instruksi =
+    typeof payload.instruction === 'string' && payload.instruction.trim()
+      ? payload.instruction.trim()
+      : `${activity.title}. ${description}`;
+  return vo(instruksi);
+}
 
 async function main() {
   await prisma.parentSettings.upsert({
@@ -424,7 +436,7 @@ async function main() {
         type: L.activity.type,
         title: L.activity.title,
         payload: JSON.stringify(L.activity.payload),
-        voiceOverKeys: vo('Selamat bermain!'),
+        voiceOverKeys: voiceOverJsonForSeedRow(L.description, L.activity),
         estimatedSec: 180,
         order: 1,
         levelId: L.id,
@@ -436,7 +448,7 @@ async function main() {
         order: 1,
         title: L.activity.title,
         payload: JSON.stringify(L.activity.payload),
-        voiceOverKeys: vo('Selamat bermain!'),
+        voiceOverKeys: voiceOverJsonForSeedRow(L.description, L.activity),
         estimatedSec: 180,
       },
     });

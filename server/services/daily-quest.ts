@@ -1,5 +1,5 @@
 import type { AgeMode } from '@prisma/client';
-import { prisma } from '../db';
+import { type DbClient, defaultDb } from '../db-client';
 import { getFirstNIncompleteUnlockedActivityIds } from './dashboard';
 
 function todayKey(): string {
@@ -13,9 +13,11 @@ function todayKey(): string {
 export async function syncAndAwardDailyQuestBonus(
   childId: string,
   ageMode: AgeMode,
+  db?: DbClient,
 ): Promise<number> {
+  const d = defaultDb(db);
   const today = todayKey();
-  const row = await prisma.dailyStreak.findUnique({ where: { childId } });
+  const row = await d.dailyStreak.findUnique({ where: { childId } });
   if (!row) return 0;
 
   let targetIds: string[];
@@ -24,8 +26,9 @@ export async function syncAndAwardDailyQuestBonus(
       childId,
       ageMode,
       4,
+      d,
     );
-    await prisma.dailyStreak.update({
+    await d.dailyStreak.update({
       where: { childId },
       data: {
         questTargetDate: today,
@@ -45,16 +48,16 @@ export async function syncAndAwardDailyQuestBonus(
 
   if (targetIds.length === 0) return 0;
 
-  const after = await prisma.dailyStreak.findUnique({ where: { childId } });
+  const after = await d.dailyStreak.findUnique({ where: { childId } });
   if (after?.questBonusDate === today) return 0;
 
-  const progresses = await prisma.progress.findMany({
+  const progresses = await d.progress.findMany({
     where: { childId, activityId: { in: targetIds } },
   });
   const pmap = new Map(progresses.map((p) => [p.activityId, p.bestStars]));
   if (!targetIds.every((id) => (pmap.get(id) ?? 0) >= 1)) return 0;
 
-  await prisma.xpLog.create({
+  await d.xpLog.create({
     data: {
       childId,
       amount: 15,
@@ -62,7 +65,7 @@ export async function syncAndAwardDailyQuestBonus(
       refId: `quest-${today}`,
     },
   });
-  await prisma.dailyStreak.update({
+  await d.dailyStreak.update({
     where: { childId },
     data: { questBonusDate: today },
   });

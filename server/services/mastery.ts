@@ -1,5 +1,6 @@
 import type { AgeMode, Track } from '@prisma/client';
 import { prisma } from '../db';
+import { type DbClient, defaultDb } from '../db-client';
 
 /** Buat baris LevelMastery untuk semua level sesuai mode anak */
 export async function initializeLevelMastery(
@@ -27,63 +28,68 @@ export async function initializeLevelMastery(
   }
 }
 
-async function levelCompletionState(
-  childId: string,
-  levelId: string,
-): Promise<{ allGe2: boolean; allGe3: boolean; count: number }> {
-  const activities = await prisma.activityDefinition.findMany({
-    where: { levelId },
-  });
-  if (activities.length === 0) return { allGe2: true, allGe3: true, count: 0 };
-
-  const progresses = await prisma.progress.findMany({
-    where: { childId, activityId: { in: activities.map((a) => a.id) } },
-  });
-  const map = new Map(progresses.map((p) => [p.activityId, p.bestStars]));
-
-  let allGe2 = true;
-  let allGe3 = true;
-  for (const a of activities) {
-    const s = map.get(a.id) ?? 0;
-    if (s < 2) allGe2 = false;
-    if (s < 3) allGe3 = false;
-  }
-  return { allGe2, allGe3, count: activities.length };
-}
-
 /** Setelah progress berubah, perbarui unlock/mastered per track */
 export async function refreshMasteryForChild(
   childId: string,
   ageMode: AgeMode,
+  db?: DbClient,
 ): Promise<void> {
+  const d = defaultDb(db);
   const tracks: Track[] = ['literasi', 'math'];
 
-  for (const track of tracks) {
-    const levels = await prisma.levelDefinition.findMany({
-      where: { ageMode, track },
-      orderBy: { order: 'asc' },
-    });
+  const [allLevels, progressRows, masteryRows] = await Promise.all([
+    d.levelDefinition.findMany({
+      where: { ageMode },
+      orderBy: [{ track: 'asc' }, { order: 'asc' }],
+      include: { activities: { select: { id: true } } },
+    }),
+    d.progress.findMany({
+      where: { childId },
+      select: { activityId: true, bestStars: true },
+    }),
+    d.levelMastery.findMany({ where: { childId } }),
+  ]);
 
-    let prevUnlocked = false;
+  const progressMap = new Map(
+    progressRows.map((p) => [p.activityId, p.bestStars]),
+  );
+  const masteryMap = new Map(masteryRows.map((m) => [m.levelId, m]));
+
+  const levelsByTrack = (t: Track) =>
+    allLevels.filter((l) => l.track === t).sort((a, b) => a.order - b.order);
+
+  for (const track of tracks) {
+    const levels = levelsByTrack(track);
 
     for (let i = 0; i < levels.length; i++) {
       const level = levels[i];
-      const { allGe3 } = await levelCompletionState(childId, level.id);
+      const activityIds = level.activities.map((a) => a.id);
+
+      let allGe3 = activityIds.length > 0;
+      for (const id of activityIds) {
+        const s = progressMap.get(id) ?? 0;
+        if (s < 3) allGe3 = false;
+      }
+      if (activityIds.length === 0) {
+        allGe3 = true;
+      }
 
       let isUnlocked = level.order === 1;
       if (!isUnlocked && i > 0) {
         const prev = levels[i - 1];
-        const prevState = await levelCompletionState(childId, prev.id);
-        isUnlocked = prevState.allGe2;
+        const prevIds = prev.activities.map((a) => a.id);
+        let prevAllGe2 = prevIds.length > 0;
+        for (const id of prevIds) {
+          if ((progressMap.get(id) ?? 0) < 2) prevAllGe2 = false;
+        }
+        if (prevIds.length === 0) prevAllGe2 = true;
+        isUnlocked = prevAllGe2;
       }
 
       const isMastered = allGe3;
+      const existing = masteryMap.get(level.id);
 
-      const existing = await prisma.levelMastery.findUnique({
-        where: { childId_levelId: { childId, levelId: level.id } },
-      });
-
-      await prisma.levelMastery.upsert({
+      await d.levelMastery.upsert({
         where: { childId_levelId: { childId, levelId: level.id } },
         create: {
           childId,
@@ -102,9 +108,6 @@ export async function refreshMasteryForChild(
           ...(isMastered ? { masteredAt: new Date() } : { masteredAt: null }),
         },
       });
-
-      prevUnlocked = isUnlocked;
-      void prevUnlocked;
     }
   }
 }

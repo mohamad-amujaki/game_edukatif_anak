@@ -1,6 +1,6 @@
 import { APIError, betterAuth } from 'better-auth';
 import { prismaAdapter } from 'better-auth/adapters/prisma';
-import { admin, createAccessControl } from 'better-auth/plugins';
+import { admin, createAccessControl, twoFactor } from 'better-auth/plugins';
 import { allowedBrowserOrigins } from './allowed-origins';
 import { prisma } from './db';
 
@@ -59,7 +59,11 @@ const roleAnalyst = ac.newRole({
   session: [],
 });
 
+const appName =
+  process.env.BETTER_AUTH_APP_NAME?.trim() || 'Game Edukatif — Admin';
+
 export const auth = betterAuth({
+  appName,
   database: prismaAdapter(prisma, { provider: 'postgresql' }),
   secret: authSecret(),
   /**
@@ -115,6 +119,9 @@ export const auth = betterAuth({
     },
   },
   plugins: [
+    twoFactor({
+      issuer: appName,
+    }),
     admin({
       ac,
       roles: {
