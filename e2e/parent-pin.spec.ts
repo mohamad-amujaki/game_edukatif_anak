@@ -20,8 +20,8 @@ test.describe('PIN orang tua', () => {
     await page.getByRole('button', { name: /Setup PIN pertama kali/i }).click();
 
     await page.locator('#parent-pin-new').fill('4242');
-
-    await page.getByRole('textbox').nth(0).fill('Warna kesukaan?');
+    // nth(0) adalah PIN lagi — pertanyaan pemulihan ialah textbox berikutnya.
+    await page.getByRole('textbox').nth(1).fill('Warna kesukaan?');
     await page.getByPlaceholder('Jawaban singkat').fill('Biru');
 
     await page.getByRole('button', { name: 'Simpan', exact: true }).click();
@@ -43,7 +43,7 @@ test.describe('PIN orang tua', () => {
 
     await page.locator('#parent-pin-current').fill('4242');
     await page.locator('#parent-pin-new').fill('9191');
-    await page.getByRole('textbox').nth(0).fill('Warna kesukaan?');
+    await page.getByRole('textbox').nth(2).fill('Warna kesukaan?');
     await page.getByPlaceholder('Jawaban singkat').fill('Hijau');
 
     await page.getByRole('button', { name: 'Simpan', exact: true }).click();

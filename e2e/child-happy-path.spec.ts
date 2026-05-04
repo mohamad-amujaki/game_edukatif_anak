@@ -32,7 +32,7 @@ test.describe('alur anak bahagia', () => {
 
     await expect(page).toHaveURL(/\/p\/[^/]+\/?$/);
 
-    await page.getByRole('link', { name: 'Literasi' }).click();
+    await page.getByRole('link', { name: 'Literasi', exact: true }).click();
 
     await page
       .getByRole('link', { name: /^Buka$/ })
