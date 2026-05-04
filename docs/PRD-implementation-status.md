@@ -19,7 +19,7 @@ Legenda: **Selesai** = perilaku inti ada di kode; **Sebagian** = dasar/placehold
 | Bintang, XP, streak, stiker, badge | Sebagian | **Album stiker** `/p/:childId/stickers` + API `GET .../stickers`; XP quest **+15** & naik level konten **+50** di `submit-activity` |
 | Audio / VO instruksi | Sebagian | **Instruksi teks** dibacakan lewat Web Speech API (`ActivityPlayer` + `voiceOverKeys.instruksi`); file MP3 di seed opsional |
 | Parent area (PIN, progres, time cap, break) | Sebagian | PIN + laporan + **UI pengaturan** (batas harian, reminder istirahat, musik/SFX/motion) di `/parent` sesi aktif; perilaku anak lewat wellness overlay |
-| Onboarding (bahasa, tutorial) | Sebagian | **Gate** [KidWelcomeGate.tsx](../src/features/home/KidWelcomeGate.tsx) di `/` + form `/auth/sign-up` & `/auth/sign-in`; **Tutorial 4 langkah** per profil; bahasa ID default; PIN area orang tua |
+| Onboarding (bahasa, tutorial) | Sebagian | **`/`** = [HomeLanding](../src/features/home/HomeLanding.tsx) (tamu default); **`/auth/sign-up`** & **`/auth/sign-in`**; **Tutorial 4 langkah** per profil; bahasa ID default; PIN area orang tua |
 | Akun orang tua (email, Google) & progres cloud | Sebagian | `defaultRole: parent` + OAuth Google opsional env; `ChildProfile.ownerUserId`; **migrasi tamu → akun** & verifikasi email tegas belum |
 | Wellness (istirahat, batas waktu) | Sebagian | **`PlayWellnessOverlay`** di halaman bermain: akumulasi waktu + modal istirahat + blok saat cap harian (`sessionStorage` per anak/hari) |
 | Offline PWA | Sebagian | **`vite-plugin-pwa`**: manifest + service worker + precache build; dev tetap dua server |
@@ -117,7 +117,7 @@ Legenda: **Selesai** = perilaku inti ada di kode; **Sebagian** = dasar/placehold
 
 ## 7. Ringkasan satu halaman
 
-**PRD v1.1 vs kode:** **akun bermain orang tua** (`role: parent`, email/Google opsional), **hingga 4 profil** per akun, **tamu** dengan penyekat cookie + **otorisasi** permainan per profil (**[child-access.ts](../server/child-access.ts)**), UI gerbang **[KidWelcomeGate.tsx](../src/features/home/KidWelcomeGate.tsx)**. **Belum diprioritaskan:** merge progres tamu ke akun, antrian offline jaringan.
+**PRD v1.1 vs kode:** **akun bermain orang tua** (`role: parent`, email/Google opsional), **hingga 4 profil** per akun, **tamu** dengan penyekat cookie + **otorisasi** permainan per profil (**[child-access.ts](../server/child-access.ts)**), halaman utama = beranda pemain (**[HomeLanding.tsx](../src/features/home/HomeLanding.tsx)**) dengan banner daftar/masuk. **Belum diprioritaskan:** merge progres tamu ke akun, antrian offline jaringan.
 
 **Sudah kuat di repo:** inti produk bermain (12 level, 7 tipe aktivitas), seed konten besar (**bank matematika + literasi**), API reward/mastery, dashboard & jalur level, area orang tua (PIN + laporan ringkas), **feedback confetti + suara** pada semua mini-game berbasis pilihan/susun.
 

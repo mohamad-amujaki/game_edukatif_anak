@@ -4,7 +4,7 @@ import { LocaleSelect } from '@/components/LocaleSelect';
 import { MascotLottie } from '@/components/MascotLottie';
 import { PwaPrompts } from '@/components/PwaPrompts';
 import { Button } from '@/components/ui/Button';
-import { KidWelcomeGate } from '@/features/home/KidWelcomeGate';
+import { HomeLanding } from '@/features/home/HomeLanding';
 import { ParentLoginPage } from '@/features/parent-auth/ParentLoginPage';
 import { ParentSignupPage } from '@/features/parent-auth/ParentSignupPage';
 import { SuperParentPage } from '@/features/parent/SuperParentPage';
@@ -237,7 +237,7 @@ function ParentAuthSignInStandalone() {
 const indexRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/',
-  component: KidWelcomeGate,
+  component: HomeLanding,
 });
 
 const authSignUpRoute = createRoute({

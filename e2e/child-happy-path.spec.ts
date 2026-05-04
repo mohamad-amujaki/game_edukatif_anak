@@ -1,8 +1,5 @@
 import { expect, test } from '@playwright/test';
-import {
-  completeHurufMatchingSession,
-  continueAsGuestWelcome,
-} from './helpers/playthrough';
+import { completeHurufMatchingSession } from './helpers/playthrough';
 
 test.describe('alur anak bahagia', () => {
   test.beforeEach(async ({ context }) => {
@@ -22,8 +19,6 @@ test.describe('alur anak bahagia', () => {
   }) => {
     const uniq = Date.now();
     await page.goto('/');
-
-    await continueAsGuestWelcome(page);
 
     await page.getByLabel('Nama panggilan').fill(`Play-${uniq}`);
     await page.getByRole('button', { name: /Simpan & mulai/i }).click();

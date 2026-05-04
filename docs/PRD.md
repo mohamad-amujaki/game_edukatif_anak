@@ -158,7 +158,7 @@ Empat prinsip yang harus tercermin di setiap fitur:
 
 **Onboarding penyelarasan** (urutan tinggi):
 
-1. **Layar pembuka orang tua**: nilai aplikasi singkat + tiga jalur eksplisit: **Daftar**, **Masuk**, **Lanjut sebagai tamu** (tamu boleh dijelaskan sebagai “simpanan hanya di perangkat ini”).
+1. **Halaman utama `/`**: beranda pemilih profil (**tamu** default); tautan/menu **Daftar**, **Masuk**, Google bersifat **opsional** (banner atau rute **`/auth/*`**).
 2. **Jalur akun (pertama kali setelah daftar/masuk Google)**: buat profil anak pertama (nama, avatar, mode TK/SD-1), lalu tetap **`Set PIN orang tua` (4 digit)**, lalu **tutorial mini anak** (tap/geser — perilaku sama dengan implementasi sekarang per `childId`).
 3. **Jalur tamu**: langsung buat profil (sama secara UX seperti sekarang) → PIN sama seperti §8.3 → tutorial anak.
 
@@ -248,23 +248,23 @@ XP bersifat **kumulatif sepanjang umur profil**, tidak pernah berkurang. Digunak
 
 ### 8.1 Onboarding (First Time)
 
-**Prinsip**: orang tua memutuskan **tamu vs akun** sebelum progres “awan” relevan; anak hanya melewati **tutorial interaksi** setelah profil ada.
+**Prinsip**: **default utama** bermain sebagai tamu dari halaman utama; orang tua memilih **Daftar/Masuk** bila menginginkan progres pada akun. Anak melewati **tutorial interaksi** setelah profil ada.
 
-#### 8.1.1 Gerbang pembuka (orang tua)
+#### 8.1.1 Pembuka aplikasi — beranda utama (default tamu)
 
 ```mermaid
 flowchart TD
-    Start([Buka aplikasi pertama kali]) --> Welcome[Layar selamat datang + narasi suara]
-    Welcome --> Choice{Pilih cara lanjut}
-    Choice --> SignUp[Daftar email plus kata sandi]
-    Choice --> SignIn[Masuk email plus kata sandi]
-    Choice --> Google[Sign up atau sign in dengan Google]
-    Choice --> Guest[Lanjut sebagai tamu]
+    Start([Buka aplikasi utama]) --> Home[Beranda pemilih profil<br/>tamu secara default]
+    Home --> Choice{Aksi orang tua?}
+    Choice -->|"Opsional"| SignUp[Daftar email kata sandi]
+    Choice -->|"Opsional"| SignIn[Masuk email kata sandi]
+    Choice -->|"Opsional"| Google[Sign up atau sign in dengan Google]
+    Choice --> Skip[Lanjut buat atau pilih profil tanpa akun]
     SignUp --> AuthOk[Sesi orang tua aktif]
     SignIn --> AuthOk
     Google --> AuthOk
-    Guest --> CreateGuest[Buat profil anak pertama]
-    AuthOk --> CreateAccount[Buat profil anak pertama<br/>dibawah akun max 4]
+    Skip --> CreateGuest[Buat atau pilih profil<br/>dibawah cookie tamu]
+    AuthOk --> CreateAccount[Buat atau pilih profil<br/>dibawah akun max 4]
 ```
 
 #### 8.1.2 Setelah profil pertama ada (kedua jalur)

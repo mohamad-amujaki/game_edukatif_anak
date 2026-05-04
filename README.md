@@ -15,7 +15,7 @@ pnpm dev                     # menjalankan API + frontend bersamaan
 
 Buka **http://localhost:5173**.
 
-- Halaman utama menawarkan **Daftar / Masuk orang tua** (simpan progres di server, maks. **4** profil anak per akun) atau **Lanjut sebagai tamu** (profil diikat cookie per peramban — bukan akun).
+- Halaman utama (**`/`**) langsung beranda pemain (mode tamu); tautan **Daftar / Masuk** ada di banner dan di **`/auth/sign-up`** & **`/auth/sign-in`** (akun menyimpan progres di server, maks. **4** profil anak per akun).
 - Buat profil anak (TK atau SD-1), lalu main dari dashboard.
 - Orang tua: tautan **Orang tua** → setup PIN 4 digit (pertama kali) atau masuk dengan PIN → laporan ringkas.
 

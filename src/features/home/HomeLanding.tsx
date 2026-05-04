@@ -1,6 +1,6 @@
 import { type ProfileRow, api } from '@/api';
 import { Button } from '@/components/ui/Button';
-import { KID_CONTINUE_AS_GUEST_KEY } from '@/features/home/KidWelcomeGate';
+import { KID_CONTINUE_AS_GUEST_KEY } from '@/features/home/kid-app-session';
 import { signOut, useSession } from '@/lib/auth-client';
 import { BRAND_APP } from '@/lib/brand';
 import { lastChildIdAtom, parentSessionAtom } from '@/state/atoms';
@@ -226,8 +226,8 @@ export function HomeLanding() {
         </div>
       ) : (
         <div className="rounded-2xl border border-amber-200 bg-amber-50/90 px-4 py-3 text-center text-sm text-amber-950 shadow-sm">
-          Anda sebagai <strong>tamu</strong> — progres terikat peramban ini.
-          Simpan ke awan?{' '}
+          Anda sebagai <strong>tamu</strong> — progres tersimpan di perangkat
+          ini. Simpan ke cloud?{' '}
           <Link
             to="/auth/sign-up"
             className="font-bold text-primary-700 underline hover:text-primary-900"
