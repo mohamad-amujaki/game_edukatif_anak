@@ -1,6 +1,7 @@
 import { timingSafeEqual } from 'node:crypto';
 import type { Track } from '@prisma/client';
 import { Hono } from 'hono';
+import { gateChildProfileForKidAppOrJson } from '../../child-access';
 import { prisma } from '../../db';
 import { createParentSession } from '../../parent-session';
 import { hashAnswer, hashPin, verifyAnswer, verifyPin } from '../../pin';
@@ -353,10 +354,9 @@ parentAreaApp.get('/api/parent/report/:childId', async (c) => {
     return jsonErr('UNAUTHORIZED', 'Butuh sesi orang tua', 401);
 
   const childId = c.req.param('childId');
-  const child = await prisma.childProfile.findUnique({
-    where: { id: childId },
-  });
-  if (!child) return jsonErr('NOT_FOUND', 'Profil tidak ada', 404);
+  const gated = await gateChildProfileForKidAppOrJson(c, childId);
+  if (gated instanceof Response) return gated;
+  const child = gated;
 
   const [xp, prog, streak, actRows, masterRows, badges] = await Promise.all([
     prisma.xpLog.aggregate({

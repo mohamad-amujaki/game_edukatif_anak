@@ -1,9 +1,11 @@
 import { type ProfileRow, api } from '@/api';
 import { Button } from '@/components/ui/Button';
+import { KID_CONTINUE_AS_GUEST_KEY } from '@/features/home/KidWelcomeGate';
+import { signOut, useSession } from '@/lib/auth-client';
 import { BRAND_APP } from '@/lib/brand';
 import { lastChildIdAtom, parentSessionAtom } from '@/state/atoms';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useNavigate } from '@tanstack/react-router';
+import { Link, useNavigate } from '@tanstack/react-router';
 import confetti from 'canvas-confetti';
 import { useAtom } from 'jotai/react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -45,6 +47,8 @@ export function HomeLanding() {
   const { t } = useTranslation('common');
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const { data: session } = useSession();
+  const parentAccount = session?.user?.role === 'parent';
   const [, setLast] = useAtom(lastChildIdAtom);
   const [parentSession] = useAtom(parentSessionAtom);
   const [name, setName] = useState('');
@@ -191,8 +195,56 @@ export function HomeLanding() {
 
   const canAddProfile = profiles.length < MAX_PROFILES;
 
+  const handleSignOutParent = async () => {
+    try {
+      sessionStorage.removeItem(KID_CONTINUE_AS_GUEST_KEY);
+    } catch {
+      /* ignore */
+    }
+    await signOut();
+    await queryClient.invalidateQueries({ queryKey: ['profiles'] });
+    navigate({ to: '/', replace: true });
+  };
+
   return (
     <div className="mx-auto w-full max-w-3xl space-y-6 pb-8">
+      {parentAccount ? (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-primary-200 bg-primary-50/90 px-4 py-3 text-sm shadow-sm">
+          <p className="font-medium text-primary-950">
+            Akun bermain aktif{' '}
+            <span className="text-neutral-600">
+              ({session?.user?.email ?? '—'})
+            </span>
+          </p>
+          <button
+            type="button"
+            className="rounded-xl bg-white px-3 py-2 text-sm font-semibold text-primary-800 ring-1 ring-primary-200 hover:bg-primary-100"
+            onClick={() => void handleSignOutParent()}
+          >
+            Keluar akun
+          </button>
+        </div>
+      ) : (
+        <div className="rounded-2xl border border-amber-200 bg-amber-50/90 px-4 py-3 text-center text-sm text-amber-950 shadow-sm">
+          Anda sebagai <strong>tamu</strong> — progres terikat peramban ini.
+          Simpan ke awan?{' '}
+          <Link
+            to="/auth/sign-up"
+            className="font-bold text-primary-700 underline hover:text-primary-900"
+          >
+            Daftar
+          </Link>{' '}
+          atau{' '}
+          <Link
+            to="/auth/sign-in"
+            className="font-bold text-primary-700 underline hover:text-primary-900"
+          >
+            masuk
+          </Link>
+          .
+        </div>
+      )}
+
       <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-primary-100 via-amber-50 to-math-100 p-6 text-center shadow-inner ring-1 ring-primary-200/60 sm:p-8">
         <p className="inline-flex items-center gap-1.5 rounded-full bg-white/80 px-3 py-1 text-xs font-bold uppercase tracking-wide text-primary-700 shadow-sm">
           <span aria-hidden>🎯</span> {BRAND_APP}

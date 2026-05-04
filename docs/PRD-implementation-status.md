@@ -1,7 +1,7 @@
 # Status implementasi vs dokumen `docs/`
 
 Dokumen ini memetakan **apa yang sudah dibangun** di repo saat ini terhadap isi [PRD.md](PRD.md), [PRD-feature-feedback-confetti-math-bank.md](PRD-feature-feedback-confetti-math-bank.md), [PRD-feature-literasi-question-bank.md](PRD-feature-literasi-question-bank.md), [PRD-recommended-backlog-levels-4-10.md](PRD-recommended-backlog-levels-4-10.md), [PRD-feature-admin-panel.md](PRD-feature-admin-panel.md), dan [roadmap.md](roadmap.md).  
-**Kode acuan**: struktur `src/`, `server/`, `prisma/` (perkiraan update: 2026-05-02).
+**Kode acuan**: struktur `src/`, `server/`, `prisma/` (perkiraan update: 2026-05-04).
 
 Legenda: **Selesai** = perilaku inti ada di kode; **Sebagian** = dasar/placeholder/back-end saja; **Belum** = tidak ada atau hanya tercatat di dokumen.
 
@@ -15,11 +15,12 @@ Legenda: **Selesai** = perilaku inti ada di kode; **Sebagian** = dasar/placehold
 | Jalur Literasi & Matematika | Selesai | Rute `/track/literasi`, `/track/math` + seed |
 | 12 level (3×2×2) + aktivitas | Selesai | Seed 12 `LevelDefinition` + aktivitas |
 | 7 jenis mini-game | Selesai | `ActivityPlayer` + tipe `ActivityType` di Prisma |
-| Multi-profil (max 4) | Selesai | `POST /api/profiles` menolak jika `childProfile.count() >= 4` ([profiles-crud.ts](../server/routes/web/profiles-crud.ts)) |
+| Multi-profil (max 4) | Selesai | Batas **per `ownerUserId` (parent)** atau **per cookie tamu `guestBindingId`** — [profiles-crud.ts](../server/routes/web/profiles-crud.ts) + [child-access.ts](../server/child-access.ts) |
 | Bintang, XP, streak, stiker, badge | Sebagian | **Album stiker** `/p/:childId/stickers` + API `GET .../stickers`; XP quest **+15** & naik level konten **+50** di `submit-activity` |
 | Audio / VO instruksi | Sebagian | **Instruksi teks** dibacakan lewat Web Speech API (`ActivityPlayer` + `voiceOverKeys.instruksi`); file MP3 di seed opsional |
 | Parent area (PIN, progres, time cap, break) | Sebagian | PIN + laporan + **UI pengaturan** (batas harian, reminder istirahat, musik/SFX/motion) di `/parent` sesi aktif; perilaku anak lewat wellness overlay |
-| Onboarding (bahasa, tutorial) | Sebagian | **Tutorial 4 langkah** `/p/:childId/onboarding` (tap/drag) sekali per profil (`localStorage`); bahasa tetap ID default; PIN tetap di area orang tua |
+| Onboarding (bahasa, tutorial) | Sebagian | **Gate** [KidWelcomeGate.tsx](../src/features/home/KidWelcomeGate.tsx) di `/` + form `/auth/sign-up` & `/auth/sign-in`; **Tutorial 4 langkah** per profil; bahasa ID default; PIN area orang tua |
+| Akun orang tua (email, Google) & progres cloud | Sebagian | `defaultRole: parent` + OAuth Google opsional env; `ChildProfile.ownerUserId`; **migrasi tamu → akun** & verifikasi email tegas belum |
 | Wellness (istirahat, batas waktu) | Sebagian | **`PlayWellnessOverlay`** di halaman bermain: akumulasi waktu + modal istirahat + blok saat cap harian (`sessionStorage` per anak/hari) |
 | Offline PWA | Sebagian | **`vite-plugin-pwa`**: manifest + service worker + precache build; dev tetap dua server |
 | Settings: musik, SFX, volume, reminder, avatar | Sebagian | `ParentSettings` punya `musicEnabled`, `sfxEnabled`, dsb.; **UI sinkron** + **volume** + **kaitan SFX gameplay** sebagian memakai `localStorage` (`game-sfx-enabled`) di `useGameFeedback`, bukan hanya API |
@@ -79,7 +80,7 @@ Legenda: **Selesai** = perilaku inti ada di kode; **Sebagian** = dasar/placehold
 
 | Gelombang / Item | Status | Catatan |
 | ----------------- | ------ | ------- |
-| **G0** better-auth, skema auth, `disableSignUp`, mount `/api/auth/*`, bootstrap `pnpm admin:create`, `auth-client` | **Selesai (inti)** | [server/auth.ts](../server/auth.ts), [server/app.ts](../server/app.ts), [scripts/admin-create.ts](../scripts/admin-create.ts) (User + Account + hash kompatibel better-auth). |
+| **G0** better-auth, mount `/api/auth/*`, bootstrap `pnpm admin:create`, signup publik **`parent`**, Google opsional | **Selesai (inti)** | [server/auth.ts](../server/auth.ts), `/admin/signup` = instruksi CLI; panel admin login terpisah. |
 | **G1** RBAC, anak, audit | **Sebagian** | [server/admin.ts](../server/admin.ts), [server/admin-middleware.ts](../server/admin-middleware.ts), [server/audit.ts](../server/audit.ts), `recordSuperParentAudit`; [src/router.tsx](../src/router.tsx) termasuk **`/admin/children/$childId`**; [AdminAuditPage.tsx](../src/features/admin/AdminAuditPage.tsx): kolom tipe actor; filter **`from`/`to`** (datetime lokal); **`super_admin`** juga filter `entityType` / **`actorType`**; tombol hapus filter. **Parsial:** PRD menyebut `requireSuperParent` — di kode [parent-super-guard.ts](../server/parent-super-guard.ts) **`denyUnlessSuperParent`**. |
 | **G2** Konten, bank, import/export | **Sebagian** | Editor konten/bank; [bank-validation.ts](../server/bank-validation.ts); [AdminImportExportPage.tsx](../src/features/admin/AdminImportExportPage.tsx). **Belum:** preview payload “kartu per item” di UI. |
 | **G3** Analytics 5 metrik, settings | **Sebagian** | [server/services/admin-analytics.ts](../server/services/admin-analytics.ts); halaman `/admin/analytics`; [AdminSettingsPage.tsx](../src/features/admin/AdminSettingsPage.tsx) (global + blok PIN **`isSuperParent`** untuk `super_admin`). **Belum:** grafik batang retensi seperti checklist §16 G3. |
@@ -107,7 +108,7 @@ Legenda: **Selesai** = perilaku inti ada di kode; **Sebagian** = dasar/placehold
 | Dokumen | Peran | Status vs repo |
 | ------- | ----- | ---------------- |
 | [architecture.md](architecture.md) | Arsitektur target | Patut disinkronkan dengan proxy Vite + server Hono aktual |
-| [database-schema.md](database-schema.md) | Skema | Umumnya selaras dengan `schema.prisma` |
+| [database-schema.md](database-schema.md) | Skema | Perbarui jika perlu: `ChildProfile.ownerUserId`, `guestBindingId` |
 | [api-contracts.md](api-contracts.md) | API | Verifikasi spot-check disarankan |
 | [content-design.md](content-design.md) | Payload mini-game | Payload seed mengikuti pola ini |
 | [design-system.md](design-system.md) | UI/audio | Sebagian (warna/tema); audio/SFX file tidak lengkap |
@@ -115,6 +116,8 @@ Legenda: **Selesai** = perilaku inti ada di kode; **Sebagian** = dasar/placehold
 ---
 
 ## 7. Ringkasan satu halaman
+
+**PRD v1.1 vs kode:** **akun bermain orang tua** (`role: parent`, email/Google opsional), **hingga 4 profil** per akun, **tamu** dengan penyekat cookie + **otorisasi** permainan per profil (**[child-access.ts](../server/child-access.ts)**), UI gerbang **[KidWelcomeGate.tsx](../src/features/home/KidWelcomeGate.tsx)**. **Belum diprioritaskan:** merge progres tamu ke akun, antrian offline jaringan.
 
 **Sudah kuat di repo:** inti produk bermain (12 level, 7 tipe aktivitas), seed konten besar (**bank matematika + literasi**), API reward/mastery, dashboard & jalur level, area orang tua (PIN + laporan ringkas), **feedback confetti + suara** pada semua mini-game berbasis pilihan/susun.
 

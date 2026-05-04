@@ -22,6 +22,7 @@ export const errorResponse = z.object({
       'VALIDATION_ERROR',
       'NOT_FOUND',
       'UNAUTHORIZED',
+      'FORBIDDEN',
       'PIN_INCORRECT',
       'PIN_NOT_SET',
       'CONFLICT',
@@ -43,7 +44,7 @@ export const errorResponse = z.object({
 | 204  | Sukses tanpa body (delete)                                  |
 | 400  | Validation error (Zod gagal parse request)                  |
 | 401  | PIN belum diverifikasi untuk endpoint parent                |
-| 403  | PIN salah                                                   |
+| 403  | Akses ditolak (PIN salah / bukan pemilik profil)            |
 | 404  | Resource tidak ditemukan                                    |
 | 409  | Conflict (misal: nama profil sudah ada)                     |
 | 429  | Rate limited (PIN brute force)                              |
@@ -51,8 +52,19 @@ export const errorResponse = z.object({
 
 ### 1.3 Authentication
 
-- **Endpoint anak (`/api/profiles`, `/api/activities`, dll.)**: tanpa autentikasi. Lokal device, profil dipilih client-side.
-- **Endpoint parent (`/api/parent/*`)**: butuh header `X-Parent-Session: <token>` yang didapat dari `POST /api/parent/verify-pin`. Token in-memory (cleared saat refresh) berlaku selama session, default 30 menit idle.
+- **Akun orang tua (Better Auth)**: sesi cookie untuk `role: parent` — daftar/masuk di `/api/auth/*` (email + opsional Google). Data profil & progres bermain memakai **`ownerUserId`** = id user sesi.
+- **Tamu**: tanpa login; server menetapkan/membaca cookie HttpOnly **`kid_guest_binding`** untuk mengelompokkan hingga **4** `ChildProfile` dengan `guestBindingId` sama. Baris lama tanpa `owner`/`binding` diadopsi ke binding cookie pada permintaan pertama (asumsi satu penyebar cepat).
+- **Staf admin** (`super_admin`, `content_editor`, `analyst`): tidak melewati otorisasi “pemilik profil” di app anak; akses ke profil anak lewat panel admin terpisah (`/api/admin/*`).
+- **Endpoint permainan (`GET/POST /api/profiles/:childId/...`)**: wajib **`childId`** milik sesi (orang tua atau bucket tamu cookie); jika tidak → `403 FORBIDDEN` atau `404` bila id tidak ada.
+- **Endpoint PIN (`/api/parent/*`)**: butuh header `X-Parent-Session: <token>` dari `POST /api/parent/verify-pin` (tetap global singleton per deploy). Laporan **`GET /api/parent/report/:childId`** juga harus memuat profil yang bisa diakses sesi yang sama (tamu vs akun).
+
+### 1.3b `GET /api/app/features`
+
+**Response** `{ data: { googleOAuth: boolean } }` — apakah OAuth Google dikonfigurasi di server (`GOOGLE_CLIENT_ID` + secret).
+
+### 1.3c `GET /api/health`
+
+**Response** (200): `{ data: { ok: true, googleOAuth: boolean } }` — health check Fly/Railway + **flag yang sama** dengan §1.3b agar klien tidak bergantung pada `/api/app/features` jika rute itu belum ada di image lama.
 
 ### 1.4 Shared Schemas
 
@@ -89,7 +101,7 @@ export const pinSchema = z.string().regex(/^\d{4}$/);
 
 ### 2.1 `GET /api/profiles`
 
-List semua profil anak di device ini.
+Daftar profil anak **sesuai konteks**: jika ada sesi **`parent`**, semua baris dengan **`ownerUserId`** = user tersebut; jika tamu, semua baris dengan **`guestBindingId`** = cookie tamu (cookie diset jika belum ada).
 
 **Request**: tanpa body.
 
@@ -126,7 +138,7 @@ const response = successResponse(childProfileSchema);
 ```
 
 **Error**:
-- `409 CONFLICT` jika lebih dari 4 profil (max per device).
+- `409 CONFLICT` jika sudah **4 profil** dalam scope yang sama (**per akun** atau **per cookie tamu**).
 
 ### 2.3 `PATCH /api/profiles/:id`
 

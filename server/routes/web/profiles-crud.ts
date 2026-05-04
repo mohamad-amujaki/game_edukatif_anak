@@ -4,7 +4,14 @@ import {
   recordDeviceProfileSelfEdit,
   recordSuperParentAudit,
 } from '../../audit';
+import {
+  adoptOrphanGuestProfiles,
+  gateChildProfileForKidAppOrJson,
+  isParentAppRole,
+  sessionUserFromCookies,
+} from '../../child-access';
 import { prisma } from '../../db';
+import { ensureGuestBindingCookie } from '../../guest-binding';
 import { isParentSessionValid } from '../../parent-session';
 import { denyUnlessSuperParent } from '../../parent-super-guard';
 import { createRateLimiter } from '../../rate-limit';
@@ -21,16 +28,61 @@ const ratePatchProfileSelf = createRateLimiter({
 /** Health, daftar/CRUD profil, reset progres super-orang tua. */
 export const profilesCrudApp = new Hono();
 
-profilesCrudApp.get('/api/health', (c) => c.json({ data: { ok: true } }));
+function googleOAuthConfigured(): boolean {
+  return Boolean(
+    process.env.GOOGLE_CLIENT_ID?.trim() &&
+      process.env.GOOGLE_CLIENT_SECRET?.trim(),
+  );
+}
 
-/** Untuk UI: apakah form “admin pertama” masih boleh dipakai (belum ada user auth). */
-profilesCrudApp.get('/api/admin-signup/open', async (c) => {
-  const count = await prisma.user.count();
-  return c.json({ open: count === 0 });
-});
+/**
+ * Health + sinyal fitur untuk UI (ada di semua rilis yang memakai rute ini).
+ * `googleOAuth` disertakan di sini agar cek produksi lewat proxy Netlify tetap jalan
+ * walau image Fly belum memuat `/api/app/features`.
+ */
+profilesCrudApp.get('/api/health', (c) =>
+  c.json({
+    data: { ok: true as const, googleOAuth: googleOAuthConfigured() },
+  }),
+);
+
+/** Fitur frontend (gateway publik) — duplikat flag untuk kompatibilitas dokumen / curl. */
+profilesCrudApp.get('/api/app/features', (c) =>
+  c.json({
+    data: {
+      googleOAuth: googleOAuthConfigured(),
+    },
+  }),
+);
+
+/** Legacy: wizard admin pertama sekarang CLI `pnpm admin:create`. */
+profilesCrudApp.get('/api/admin-signup/open', (c) =>
+  c.json({ open: false as boolean }),
+);
 
 profilesCrudApp.get('/api/profiles', async (c) => {
+  const u = await sessionUserFromCookies(c);
+
+  if (u && isParentAppRole(u.role)) {
+    const list = await prisma.childProfile.findMany({
+      where: { ownerUserId: u.id },
+      orderBy: { createdAt: 'asc' },
+    });
+    return c.json({
+      data: list.map((p) => ({
+        id: p.id,
+        name: p.name,
+        avatarKey: p.avatarKey,
+        ageMode: p.ageMode,
+        createdAt: p.createdAt.toISOString(),
+      })),
+    });
+  }
+
+  const binding = ensureGuestBindingCookie(c);
+  await adoptOrphanGuestProfiles(binding);
   const list = await prisma.childProfile.findMany({
+    where: { ownerUserId: null, guestBindingId: binding },
     orderBy: { createdAt: 'asc' },
   });
   return c.json({
@@ -50,11 +102,54 @@ profilesCrudApp.post('/api/profiles', async (c) => {
   if (!parsed.success)
     return jsonErr('VALIDATION_ERROR', parsed.error.message, 400);
 
-  const count = await prisma.childProfile.count();
-  if (count >= 4)
-    return jsonErr('CONFLICT', 'Maksimal 4 profil per perangkat', 409);
+  const u = await sessionUserFromCookies(c);
 
-  const profile = await prisma.childProfile.create({ data: parsed.data });
+  if (u && isParentAppRole(u.role)) {
+    const count = await prisma.childProfile.count({
+      where: { ownerUserId: u.id },
+    });
+    if (count >= 4)
+      return jsonErr(
+        'CONFLICT',
+        'Maksimal 4 profil anak per akun orang tua',
+        409,
+      );
+
+    const profile = await prisma.childProfile.create({
+      data: { ...parsed.data, ownerUserId: u.id, guestBindingId: null },
+    });
+    await initializeLevelMastery(profile.id, profile.ageMode);
+
+    return c.json(
+      {
+        data: {
+          id: profile.id,
+          name: profile.name,
+          avatarKey: profile.avatarKey,
+          ageMode: profile.ageMode,
+          createdAt: profile.createdAt.toISOString(),
+        },
+      },
+      201,
+    );
+  }
+
+  const binding = ensureGuestBindingCookie(c);
+  await adoptOrphanGuestProfiles(binding);
+
+  const gCount = await prisma.childProfile.count({
+    where: { ownerUserId: null, guestBindingId: binding },
+  });
+  if (gCount >= 4)
+    return jsonErr(
+      'CONFLICT',
+      'Maksimal 4 profil tamu untuk perangkat ini',
+      409,
+    );
+
+  const profile = await prisma.childProfile.create({
+    data: { ...parsed.data, ownerUserId: null, guestBindingId: binding },
+  });
   await initializeLevelMastery(profile.id, profile.ageMode);
 
   return c.json(
@@ -85,8 +180,9 @@ profilesCrudApp.patch(
     if (!parsed.success)
       return jsonErr('VALIDATION_ERROR', parsed.error.message, 400);
 
-    const exists = await prisma.childProfile.findUnique({ where: { id } });
-    if (!exists) return jsonErr('NOT_FOUND', 'Profil tidak ada', 404);
+    const gated = await gateChildProfileForKidAppOrJson(c, id);
+    if (gated instanceof Response) return gated;
+    const exists = gated;
 
     const settings = await prisma.parentSettings.findUnique({
       where: { id: 'singleton' },

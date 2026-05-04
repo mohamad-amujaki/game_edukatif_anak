@@ -15,8 +15,11 @@ pnpm dev                     # menjalankan API + frontend bersamaan
 
 Buka **http://localhost:5173**.
 
+- Halaman utama menawarkan **Daftar / Masuk orang tua** (simpan progres di server, maks. **4** profil anak per akun) atau **Lanjut sebagai tamu** (profil diikat cookie per peramban — bukan akun).
 - Buat profil anak (TK atau SD-1), lalu main dari dashboard.
 - Orang tua: tautan **Orang tua** → setup PIN 4 digit (pertama kali) atau masuk dengan PIN → laporan ringkas.
+
+**Admin panel** (konten/internal): bootstrap **hanya** dengan `pnpm admin:create` — bukan formulir web. Lihat **`/admin/signup`** untuk perintah CLI.
 
 ## Stack teknis
 
@@ -41,6 +44,29 @@ Buka **http://localhost:5173**.
 - **`VITE_API_URL`** (build Netlify): opsional. Kosongkan jika memakai proxy Netlify di atas; klien memakai [`apiBaseURL()`](src/lib/api-base-url.ts) (origin Netlify). Set ke URL API langsung (mis. `https://xxx.fly.dev`) jika **tidak** memakai proxy.
 - Pada **server API** (Fly): **`BETTER_AUTH_URL`** harus cocok dengan URL yang dipakai browser untuk auth — jika frontend memakai Netlify + proxy, biasanya **`https://game-edukatif-anak.netlify.app`** (bukan hanya URL Fly). Tetap set **`BETTER_AUTH_SECRET`** (≥32 karakter).
 
+### Sign in with Google (orang tua) — produksi
+
+Tombol Google di UI membaca `googleOAuth` dari **`GET /api/health`** (selalu di-proxy lewat Netlify) atau cadangan `GET /api/app/features`. Nilai `true` hanya jika **keduanya** terisi di **server API** (Fly/Railway), bukan di Netlify build:
+
+| Variabel | Sumber |
+| -------- | ------ |
+| `GOOGLE_CLIENT_ID` | Client ID dari Google Cloud Console (OAuth 2.0 Client ID tipe **Web application**). |
+| `GOOGLE_CLIENT_SECRET` | Client secret pasangan tersebut. |
+
+**Google Cloud Console** ([Credentials](https://console.cloud.google.com/apis/credentials)): buat/edit OAuth client **Web**.
+
+- **Authorized JavaScript origins:** origin yang sama dengan **`BETTER_AUTH_URL`** (tanpa path), mis. `https://game-edukatif-anak.netlify.app`.
+- **Authorized redirect URIs:** pastikan ada persis **`{BETTER_AUTH_URL}/api/auth/callback/google`** (tanpa slash di akhir `BETTER_AUTH_URL`).  
+  Contoh Netlify + proxy: `https://game-edukatif-anak.netlify.app/api/auth/callback/google`.
+
+Setelah secret diset di Fly/Railway, **wajib `fly deploy`** (atau redeploy Railway) agar kode terbaru membaca env. Verifikasi lewat health (disarankan):
+
+```bash
+curl -sS "https://<origin-publik-anda>/api/health"
+```
+
+Respons JSON harus memuat `"googleOAuth":true` (bersama `"ok":true`) saat kredensial Google terpasang. Anda juga bisa menguji `curl …/api/app/features` setelah deploy yang memuat rute itu.
+
 ## Deploy API (Railway) — Hono + PostgreSQL
 
 1. **Buat project & service** di [Railway](https://railway.app/), hubungkan repo Git yang sama, **Root directory** biarkan root (atau sesuaikan jika monorepo).
@@ -52,6 +78,7 @@ Buka **http://localhost:5173**.
    | `DATABASE_URL` | Connection string PostgreSQL (mis. dari plugin Postgres Railway, atau hostmanaged seperti Prisma Postgres). Harus pakai `sslmode=require` jika penyedia mensyaratkan TLS. |
    | `BETTER_AUTH_URL` | URL publik Railway service ini, mis. `https://xxx.up.railway.app` (tanpa slash akhir). |
    | `BETTER_AUTH_SECRET` | Minimal 32 karakter (acak). |
+   | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | Opsional — aktifkan *Sign in with Google* orang tua. |
    | `PIN_HASH_PEPPER` | Sama seperti lokal; jangan kosong di produksi. |
    | `CORS_ORIGINS` | Opsional; domain Netlify sudah default di kode. |
 
@@ -80,6 +107,14 @@ Prasyarat: [Fly CLI](https://fly.io/docs/hands-on/install-flyctl/) terpasang dan
      BETTER_AUTH_URL="https://game-edukatif-anak.netlify.app" \
      BETTER_AUTH_SECRET="<minimal-32-karakter-acak>" \
      PIN_HASH_PEPPER="<acak-kuat-terpisah>"
+   ```
+
+   Opsional (Google — lihat bagian *Sign in with Google* di atas):
+
+   ```bash
+   fly secrets set \
+     GOOGLE_CLIENT_ID="....apps.googleusercontent.com" \
+     GOOGLE_CLIENT_SECRET="GOCSPX-..."
    ```
 
    - **`DATABASE_URL`**: dari [Prisma Console](https://console.prisma.io/) → database Anda → **Pooled connection** (untuk runtime Node / `@prisma/client`).

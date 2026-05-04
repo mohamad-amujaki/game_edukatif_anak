@@ -1,4 +1,5 @@
 import { Button } from '@/components/ui/Button';
+import { useSession } from '@/lib/auth-client';
 import { BRAND_APP } from '@/lib/brand';
 import { useNavigate } from '@tanstack/react-router';
 import { useState } from 'react';
@@ -10,6 +11,8 @@ type Props = { childId: string };
  */
 export function OnboardingFlowPage({ childId }: Props) {
   const navigate = useNavigate();
+  const { data: sess } = useSession();
+  const parentCloud = sess?.user?.role === 'parent';
   const [step, setStep] = useState(0);
 
   const finish = () => {
@@ -36,6 +39,11 @@ export function OnboardingFlowPage({ childId }: Props) {
             Kamu akan bermain sambil belajar huruf, kata, dan berhitung. Ikuti
             penjelasan singkat ini dulu.
           </p>
+          {parentCloud ? (
+            <p className="mt-2 text-xs font-medium text-primary-800">
+              Progresmu aman di akun orang tuamu untuk profil ini.
+            </p>
+          ) : null}
           <Button className="mt-6 w-full" onClick={() => setStep(1)}>
             Lanjut
           </Button>

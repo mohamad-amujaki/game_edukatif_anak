@@ -28,21 +28,23 @@ model ParentSettings {
 
 /// Akun dewasa (panel admin). Dipisah dari `ChildProfile`.
 model User {
-  id                 String      @id
+  id                 String         @id
   name               String
   email              String
-  emailVerified      Boolean     @default(false)
+  emailVerified      Boolean        @default(false)
   image              String?
-  createdAt          DateTime    @default(now())
-  updatedAt          DateTime    @updatedAt
+  createdAt          DateTime       @default(now())
+  updatedAt          DateTime       @updatedAt
   role               String?
-  banned             Boolean?    @default(false)
+  banned             Boolean?       @default(false)
   banReason          String?
   banExpires         DateTime?
-  twoFactorEnabled   Boolean     @default(false)
+  twoFactorEnabled   Boolean        @default(false)
   sessions           Session[]
   accounts           Account[]
   twoFactor          TwoFactor?
+  /// Profil anak milik orang tua (better-auth cloud); staff admin tidak memakai relasi ini.
+  ownedChildren      ChildProfile[]
 
   @@unique([email])
   @@map("user")
@@ -117,6 +119,12 @@ model ChildProfile {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  /// null = profil tamu (diikat `guestBindingId`); non-null = progres dibawah akun orang tua.
+  ownerUserId     String?
+  ownerUser       User?    @relation(fields: [ownerUserId], references: [id], onDelete: Cascade)
+  /// Opaque token per browser/perangkat (cookie) untuk penyekat profil tamu di server DB.
+  guestBindingId String?
+
   progress       Progress[]
   xpLogs         XpLog[]
   earnedStickers EarnedSticker[]
@@ -126,6 +134,8 @@ model ChildProfile {
   playSessions   PlaySession[]
 
   @@index([createdAt])
+  @@index([ownerUserId])
+  @@index([guestBindingId])
 }
 
 enum AgeMode {

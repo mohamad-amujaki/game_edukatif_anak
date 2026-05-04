@@ -4,7 +4,9 @@ import { LocaleSelect } from '@/components/LocaleSelect';
 import { MascotLottie } from '@/components/MascotLottie';
 import { PwaPrompts } from '@/components/PwaPrompts';
 import { Button } from '@/components/ui/Button';
-import { HomeLanding } from '@/features/home/HomeLanding';
+import { KidWelcomeGate } from '@/features/home/KidWelcomeGate';
+import { ParentLoginPage } from '@/features/parent-auth/ParentLoginPage';
+import { ParentSignupPage } from '@/features/parent-auth/ParentSignupPage';
 import { SuperParentPage } from '@/features/parent/SuperParentPage';
 import { PlayWellnessOverlay } from '@/features/wellness/PlayWellnessOverlay';
 import { authClient } from '@/lib/auth-client';
@@ -222,10 +224,32 @@ const rootRoute = createRootRoute({
   component: RootLayout,
 });
 
+function ParentAuthSignUpStandalone() {
+  const navigate = useNavigate();
+  return <ParentSignupPage onBack={() => navigate({ to: '/' })} />;
+}
+
+function ParentAuthSignInStandalone() {
+  const navigate = useNavigate();
+  return <ParentLoginPage onBack={() => navigate({ to: '/' })} />;
+}
+
 const indexRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/',
-  component: HomeLanding,
+  component: KidWelcomeGate,
+});
+
+const authSignUpRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/auth/sign-up',
+  component: ParentAuthSignUpStandalone,
+});
+
+const authSignInRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/auth/sign-in',
+  component: ParentAuthSignInStandalone,
 });
 
 function emojiAvatar(key: string): string {
@@ -1624,6 +1648,8 @@ const adminUsersRoute = createRoute({
 
 const routeTree = rootRoute.addChildren([
   indexRoute,
+  authSignUpRoute,
+  authSignInRoute,
   onboardingRoute,
   childRoute,
   trackRoute,

@@ -1,6 +1,11 @@
 import { expect } from '@playwright/test';
 import type { Page } from '@playwright/test';
 
+/** Lewati gerbang selamat datang (akun bermain vs tamu). */
+export async function continueAsGuestWelcome(page: Page) {
+  await page.getByRole('button', { name: /Lanjut sebagai tamu/i }).click();
+}
+
 /** Selesaikan sesi aktivitas cocok huruf dengan mencoba kombinasi jawaban sampai banner hasil muncul. */
 export async function completeHurufMatchingSession(page: Page) {
   const maxSteps = 150;
