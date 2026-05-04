@@ -38,7 +38,14 @@ test.describe('alur anak bahagia', () => {
     /** Langsung ke aktivitas seed TK — menghindari status terkunci / race daftar level. */
     await page.goto(`/p/${childId}/play/tk-literasi-1-act1`);
 
-    await expect(page.getByText(/^Soal /)).toBeVisible({ timeout: 60_000 });
+    await expect(
+      page
+        .locator('.flex.flex-wrap.justify-center.gap-3')
+        .getByRole('button')
+        .first(),
+    ).toBeVisible({
+      timeout: 60_000,
+    });
 
     await completeHurufMatchingSession(page);
 
