@@ -1,32 +1,22 @@
 import { api } from '@/api';
-import { adminApi } from '@/api-admin';
 import { GameFeedbackSync } from '@/components/GameFeedbackSync';
+import { LocaleSelect } from '@/components/LocaleSelect';
+import { MascotLottie } from '@/components/MascotLottie';
+import { PwaPrompts } from '@/components/PwaPrompts';
 import { Button } from '@/components/ui/Button';
-import { ActivityPlayer } from '@/features/ActivityPlayer';
-import { AdminActivityEditorPage } from '@/features/admin/AdminActivityEditorPage';
-import { AdminAnalyticsPage } from '@/features/admin/AdminAnalyticsPage';
-import { AdminAuditPage } from '@/features/admin/AdminAuditPage';
-import { AdminBankEditorPage } from '@/features/admin/AdminBankEditorPage';
-import { AdminChildDetailPage } from '@/features/admin/AdminChildDetailPage';
-import { AdminContentPage } from '@/features/admin/AdminContentPage';
-import { AdminImportExportPage } from '@/features/admin/AdminImportExportPage';
-import { AdminSettingsPage } from '@/features/admin/AdminSettingsPage';
-import { AdminShell } from '@/features/admin/AdminShell';
-import { AdminUsersPage } from '@/features/admin/AdminUsersPage';
-import { LoginPage as AdminLoginPage } from '@/features/admin/LoginPage';
-import { SignupPage as AdminSignupPage } from '@/features/admin/SignupPage';
-import { StickerAlbumPage } from '@/features/child/StickerAlbumPage';
 import { HomeLanding } from '@/features/home/HomeLanding';
-import { OnboardingFlowPage } from '@/features/onboarding/OnboardingFlowPage';
+import { ParentLoginPage } from '@/features/parent-auth/ParentLoginPage';
+import { ParentSignupPage } from '@/features/parent-auth/ParentSignupPage';
 import { SuperParentPage } from '@/features/parent/SuperParentPage';
 import { PlayWellnessOverlay } from '@/features/wellness/PlayWellnessOverlay';
 import { authClient } from '@/lib/auth-client';
-import { BRAND_ADMIN, BRAND_APP } from '@/lib/brand';
+import { BRAND_APP } from '@/lib/brand';
 import {
   type DevicePreferences,
   applyDevicePreferencesToGameFeedback,
 } from '@/lib/game-feedback-sync';
 import { parentSessionAtom } from '@/state/atoms';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Link,
   Outlet,
@@ -40,7 +30,122 @@ import {
 } from '@tanstack/react-router';
 import { Provider as JotaiProvider } from 'jotai';
 import { useAtom } from 'jotai/react';
-import { useCallback, useEffect, useState } from 'react';
+import { Suspense, lazy, useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+
+const ActivityPlayer = lazy(() =>
+  import('@/features/ActivityPlayer').then((m) => ({
+    default: m.ActivityPlayer,
+  })),
+);
+const OnboardingFlowPage = lazy(() =>
+  import('@/features/onboarding/OnboardingFlowPage').then((m) => ({
+    default: m.OnboardingFlowPage,
+  })),
+);
+const StickerAlbumPage = lazy(() =>
+  import('@/features/child/StickerAlbumPage').then((m) => ({
+    default: m.StickerAlbumPage,
+  })),
+);
+const AdminShell = lazy(() =>
+  import('@/features/admin/AdminShell').then((m) => ({
+    default: m.AdminShell,
+  })),
+);
+const AdminLoginPage = lazy(() =>
+  import('@/features/admin/LoginPage').then((m) => ({ default: m.LoginPage })),
+);
+const AdminSignupPage = lazy(() =>
+  import('@/features/admin/SignupPage').then((m) => ({
+    default: m.SignupPage,
+  })),
+);
+const AdminDashboardRoutePage = lazy(
+  () => import('@/features/admin/AdminDashboardRoutePage'),
+);
+const AdminChildrenRoutePage = lazy(
+  () => import('@/features/admin/AdminChildrenRoutePage'),
+);
+const AdminChildDetailPage = lazy(() =>
+  import('@/features/admin/AdminChildDetailPage').then((m) => ({
+    default: m.AdminChildDetailPage,
+  })),
+);
+const AdminAuditPage = lazy(() =>
+  import('@/features/admin/AdminAuditPage').then((m) => ({
+    default: m.AdminAuditPage,
+  })),
+);
+const AdminContentPage = lazy(() =>
+  import('@/features/admin/AdminContentPage').then((m) => ({
+    default: m.AdminContentPage,
+  })),
+);
+const AdminActivityEditorPage = lazy(() =>
+  import('@/features/admin/AdminActivityEditorPage').then((m) => ({
+    default: m.AdminActivityEditorPage,
+  })),
+);
+const AdminTwoFactorPage = lazy(() =>
+  import('@/features/admin/AdminTwoFactorPage').then((m) => ({
+    default: m.AdminTwoFactorPage,
+  })),
+);
+const AdminActivityPreviewPage = lazy(() =>
+  import('@/features/admin/AdminActivityPreviewPage').then((m) => ({
+    default: m.AdminActivityPreviewPage,
+  })),
+);
+const AdminBankEditorPage = lazy(() =>
+  import('@/features/admin/AdminBankEditorPage').then((m) => ({
+    default: m.AdminBankEditorPage,
+  })),
+);
+const AdminAnalyticsPage = lazy(() =>
+  import('@/features/admin/AdminAnalyticsPage').then((m) => ({
+    default: m.AdminAnalyticsPage,
+  })),
+);
+const AdminSettingsPage = lazy(() =>
+  import('@/features/admin/AdminSettingsPage').then((m) => ({
+    default: m.AdminSettingsPage,
+  })),
+);
+const AdminImportExportPage = lazy(() =>
+  import('@/features/admin/AdminImportExportPage').then((m) => ({
+    default: m.AdminImportExportPage,
+  })),
+);
+const AdminUsersPage = lazy(() =>
+  import('@/features/admin/AdminUsersPage').then((m) => ({
+    default: m.AdminUsersPage,
+  })),
+);
+
+function AdminSuspense({ children }: { children: React.ReactNode }) {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex min-h-[40vh] items-center justify-center text-neutral-600">
+          Memuat panel…
+        </div>
+      }
+    >
+      {children}
+    </Suspense>
+  );
+}
+
+function KidSuspense({ children }: { children: React.ReactNode }) {
+  return (
+    <Suspense
+      fallback={<p className="p-6 text-center text-neutral-600">Memuat…</p>}
+    >
+      {children}
+    </Suspense>
+  );
+}
 
 function AppChrome({
   children,
@@ -65,25 +170,30 @@ function AppChrome({
 function RootLayout() {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const isAdmin = pathname.startsWith('/admin');
+  const { t } = useTranslation('common');
 
   return (
     <JotaiProvider>
       <GameFeedbackSync />
+      <PwaPrompts />
       <AppChrome variant={isAdmin ? 'admin' : 'kids'}>
         {!isAdmin ? (
-          <header className="sticky top-0 z-10 flex items-center justify-between bg-[color:var(--color-canvas)]/95 py-3 backdrop-blur">
+          <header className="sticky top-0 z-10 flex flex-wrap items-center justify-between gap-2 bg-[color:var(--color-canvas)]/95 py-3 backdrop-blur">
             <Link
               to="/"
               className="font-[family-name:var(--font-display)] text-xl font-bold text-[var(--color-primary-600)]"
             >
               {BRAND_APP}
             </Link>
-            <Link
-              to="/parent"
-              className="rounded-full bg-neutral-200 px-3 py-2 text-sm font-semibold text-neutral-700"
-            >
-              Orang tua
-            </Link>
+            <div className="flex shrink-0 items-center gap-2">
+              <LocaleSelect />
+              <Link
+                to="/parent"
+                className="rounded-full bg-neutral-200 px-3 py-2 text-sm font-semibold text-neutral-700"
+              >
+                {t('nav.parent')}
+              </Link>
+            </div>
           </header>
         ) : null}
         <Outlet />
@@ -114,10 +224,32 @@ const rootRoute = createRootRoute({
   component: RootLayout,
 });
 
+function ParentAuthSignUpStandalone() {
+  const navigate = useNavigate();
+  return <ParentSignupPage onBack={() => navigate({ to: '/' })} />;
+}
+
+function ParentAuthSignInStandalone() {
+  const navigate = useNavigate();
+  return <ParentLoginPage onBack={() => navigate({ to: '/' })} />;
+}
+
 const indexRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/',
   component: HomeLanding,
+});
+
+const authSignUpRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/auth/sign-up',
+  component: ParentAuthSignUpStandalone,
+});
+
+const authSignInRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/auth/sign-in',
+  component: ParentAuthSignInStandalone,
 });
 
 function emojiAvatar(key: string): string {
@@ -142,7 +274,11 @@ const onboardingRoute = createRoute({
 
 function OnboardingRoutePage() {
   const { childId } = onboardingRoute.useParams();
-  return <OnboardingFlowPage childId={childId} />;
+  return (
+    <KidSuspense>
+      <OnboardingFlowPage childId={childId} />
+    </KidSuspense>
+  );
 }
 
 const childRoute = createRoute({
@@ -154,18 +290,14 @@ const childRoute = createRoute({
 
 function DashboardPage() {
   const { childId } = childRoute.useParams();
-  const [data, setData] = useState<Record<string, unknown> | null>(null);
-  const [err, setErr] = useState<string | null>(null);
+  const { data, error, isPending } = useQuery({
+    queryKey: ['dashboard', childId],
+    queryFn: () => api.getDashboard(childId),
+  });
 
-  useEffect(() => {
-    api
-      .getDashboard(childId)
-      .then(setData)
-      .catch(() => setErr('Gagal memuat'));
-  }, [childId]);
-
-  if (err) return <p className="p-6 text-center text-red-600">{err}</p>;
-  if (!data) return <p className="p-6 text-center">Memuat…</p>;
+  if (error)
+    return <p className="p-6 text-center text-red-600">Gagal memuat</p>;
+  if (isPending || !data) return <p className="p-6 text-center">Memuat…</p>;
 
   const child = data.child as { name: string; avatarKey: string };
   const totalXp = data.totalXp as number;
@@ -175,10 +307,18 @@ function DashboardPage() {
     activityTitle: string;
     track: string;
   }>;
+  const weeklyQuest = data.weeklyQuest as
+    | {
+        distinctActivitiesThisWeek: number;
+        target: number;
+        bonusXpClaimedThisWeek: boolean;
+      }
+    | undefined;
 
   return (
     <div className="space-y-5 px-4">
       <div className="flex items-center gap-3 rounded-3xl bg-white p-4 shadow">
+        <MascotLottie state="idle" className="h-16 w-16 shrink-0" />
         <span className="text-5xl">{emojiAvatar(child.avatarKey)}</span>
         <div>
           <p className="font-[family-name:var(--font-display)] text-2xl font-bold">
@@ -214,6 +354,33 @@ function DashboardPage() {
         Album stiker
       </Link>
 
+      {weeklyQuest ? (
+        <div className="rounded-2xl bg-white p-4 shadow ring-1 ring-black/5">
+          <p className="font-semibold">Quest mingguan</p>
+          <p className="mt-1 text-sm text-neutral-600">
+            Selesaikan {weeklyQuest.target} aktivitas berbeda (≥1★) minggu ini
+            untuk +25 XP dan stiker langka.
+          </p>
+          <div className="mt-2 h-2 overflow-hidden rounded-full bg-neutral-200">
+            <div
+              className="h-full rounded-full bg-primary-500 transition-[width]"
+              style={{
+                width: `${Math.min(100, (weeklyQuest.distinctActivitiesThisWeek / weeklyQuest.target) * 100)}%`,
+              }}
+            />
+          </div>
+          <p className="mt-2 text-sm font-medium text-neutral-800">
+            {weeklyQuest.distinctActivitiesThisWeek}/{weeklyQuest.target}{' '}
+            aktivitas
+            {weeklyQuest.bonusXpClaimedThisWeek ? (
+              <span className="ml-2 text-emerald-600">
+                · Bonus minggu diambil
+              </span>
+            ) : null}
+          </p>
+        </div>
+      ) : null}
+
       <div>
         <p className="mb-2 font-semibold">Quest hari ini</p>
         <div className="space-y-2">
@@ -248,11 +415,10 @@ const trackRoute = createRoute({
 
 function TrackPage() {
   const { childId, trackId } = trackRoute.useParams();
-  const [levels, setLevels] = useState<Array<Record<string, unknown>>>([]);
-
-  useEffect(() => {
-    api.getLevels(childId, trackId).then(setLevels);
-  }, [childId, trackId]);
+  const { data: levels = [] } = useQuery({
+    queryKey: ['levels', childId, trackId],
+    queryFn: () => api.getLevels(childId, trackId),
+  });
 
   return (
     <div className="space-y-3 px-4">
@@ -309,13 +475,12 @@ const levelDetailRoute = createRoute({
 
 function LevelDetailPage() {
   const { childId, levelId } = levelDetailRoute.useParams();
-  const [data, setData] = useState<Record<string, unknown> | null>(null);
+  const { data, isPending } = useQuery({
+    queryKey: ['levelDetail', childId, levelId],
+    queryFn: () => api.getLevelDetail(childId, levelId),
+  });
 
-  useEffect(() => {
-    api.getLevelDetail(childId, levelId).then(setData);
-  }, [childId, levelId]);
-
-  if (!data) return <p className="p-6 text-center">Memuat…</p>;
+  if (isPending || !data) return <p className="p-6 text-center">Memuat…</p>;
 
   const acts =
     (data.activities as Array<{
@@ -367,77 +532,106 @@ const stickerAlbumRoute = createRoute({
 
 function StickerAlbumRoutePage() {
   const { childId } = stickerAlbumRoute.useParams();
-  return <StickerAlbumPage childId={childId} />;
+  return (
+    <KidSuspense>
+      <StickerAlbumPage childId={childId} />
+    </KidSuspense>
+  );
 }
 
 function PlayPage() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const { childId, activityId } = playRoute.useParams();
-  const [act, setAct] = useState<Awaited<
-    ReturnType<typeof api.getActivity>
-  > | null>(null);
+  const {
+    data: act,
+    error: loadErr,
+    isPending: actPending,
+  } = useQuery({
+    queryKey: ['activity', activityId, childId],
+    queryFn: () => api.getActivity(activityId, childId),
+  });
+
+  const { data: wellness } = useQuery({
+    queryKey: ['devicePreferences'],
+    queryFn: () => api.getDevicePreferences(),
+    staleTime: 120_000,
+    retry: 1,
+  });
+
   const [result, setResult] = useState<Record<string, unknown> | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [replayKey, setReplayKey] = useState(0);
-  const [wellness, setWellness] = useState<DevicePreferences | null>(null);
 
-  useEffect(() => {
-    api
-      .getActivity(activityId)
-      .then(setAct)
-      .catch(() => setErr('Tidak dapat memuat aktivitas'));
-  }, [activityId]);
+  const overlayPrefs: DevicePreferences | null =
+    wellness ??
+    ({
+      dailyTimeCapMinutes: 30,
+      breakReminderMinutes: 15,
+      sfxEnabled: true,
+      musicEnabled: true,
+      reduceMotion: false,
+    } as DevicePreferences);
 
-  useEffect(() => {
-    api
-      .getDevicePreferences()
-      .then(setWellness)
-      .catch(() =>
-        setWellness({
-          dailyTimeCapMinutes: 30,
-          breakReminderMinutes: 15,
-          sfxEnabled: true,
-          musicEnabled: true,
-          reduceMotion: false,
-        }),
-      );
-  }, []);
-
-  if (err) return <p className="p-6 text-center text-red-600">{err}</p>;
-  if (!act) return <p className="p-6 text-center">Memuat permainan…</p>;
+  if (loadErr)
+    return (
+      <p className="p-6 text-center text-red-600">
+        Tidak dapat memuat aktivitas
+      </p>
+    );
+  if (actPending || !act)
+    return <p className="p-6 text-center">Memuat permainan…</p>;
 
   return (
     <div>
-      {wellness ? (
-        <PlayWellnessOverlay
-          childId={childId}
-          dailyCapMinutes={wellness.dailyTimeCapMinutes}
-          breakReminderMinutes={wellness.breakReminderMinutes}
-        />
-      ) : null}
-      <ActivityPlayer
-        key={replayKey}
-        activityType={act.type}
-        payload={act.payload}
-        title={act.title}
-        instructionText={act.voiceOverKeys?.instruksi}
-        onComplete={async (r) => {
-          try {
-            const res = await api.submitActivity(childId, activityId, {
-              score: r.score,
-              maxScore: r.maxScore,
-              mistakes: r.mistakes,
-              durationSec: r.durationSec,
-            });
-            setResult(res);
-          } catch (e) {
-            setErr(e instanceof Error ? e.message : 'Gagal menyimpan');
-          }
-        }}
+      <PlayWellnessOverlay
+        childId={childId}
+        dailyCapMinutes={overlayPrefs.dailyTimeCapMinutes}
+        breakReminderMinutes={overlayPrefs.breakReminderMinutes}
       />
+      {err ? (
+        <p className="px-4 py-2 text-center text-sm text-red-600">{err}</p>
+      ) : null}
+      <KidSuspense>
+        <ActivityPlayer
+          key={replayKey}
+          activityType={act.type}
+          payload={act.payload}
+          title={act.title}
+          voiceOver={act.voiceOverKeys}
+          mathQuestionCount={act.sessionQuestionCount}
+          onComplete={async (r) => {
+            try {
+              const res = await api.submitActivity(childId, activityId, {
+                score: r.score,
+                maxScore: r.maxScore,
+                mistakes: r.mistakes,
+                durationSec: r.durationSec,
+              });
+              setErr(null);
+              setResult(res);
+              void queryClient.invalidateQueries({
+                queryKey: ['dashboard', childId],
+              });
+              void queryClient.invalidateQueries({
+                queryKey: ['levels', childId],
+              });
+              void queryClient.invalidateQueries({
+                queryKey: ['stickers', childId],
+              });
+            } catch (e) {
+              setErr(e instanceof Error ? e.message : 'Gagal menyimpan');
+            }
+          }}
+        />
+      </KidSuspense>
       {result ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-6">
           <div className="w-full max-w-sm rounded-3xl bg-white p-6 text-center shadow-xl">
+            <MascotLottie
+              state="celebrate"
+              className="mx-auto mb-2 h-24 w-24"
+            />
             <p className="font-[family-name:var(--font-display)] text-3xl font-bold text-primary-600">
               Hebat!
             </p>
@@ -460,6 +654,7 @@ function PlayPage() {
                 variant="secondary"
                 className="w-full"
                 onClick={() => {
+                  setErr(null);
                   setResult(null);
                   setReplayKey((k) => k + 1);
                 }}
@@ -487,16 +682,30 @@ const parentSuperRoute = createRoute({
 });
 
 function ParentPage() {
+  const queryClient = useQueryClient();
   const [session, setSession] = useAtom(parentSessionAtom);
   const [pin, setPin] = useState('');
   const [currentPin, setCurrentPin] = useState('');
-  const [profiles, setProfiles] = useState<Array<{ id: string; name: string }>>(
-    [],
-  );
+  const [step, setStep] = useState<
+    'gate' | 'setup' | 'app' | 'forgot' | 'forgot-new'
+  >('gate');
+  const { data: profiles = [] } = useQuery({
+    queryKey: ['profiles'],
+    queryFn: () => api.getProfiles(),
+    enabled: step === 'app',
+  });
   const [report, setReport] = useState<Record<string, unknown> | null>(null);
-  const [step, setStep] = useState<'gate' | 'setup' | 'app'>('gate');
   const [recoverQ, setRecoverQ] = useState('Siapa nama hewan peliharaanmu?');
   const [recoverA, setRecoverA] = useState('');
+  const [forgotAnswer, setForgotAnswer] = useState('');
+  const [forgotQuestion, setForgotQuestion] = useState('');
+  const [recoveryToken, setRecoveryToken] = useState<string | null>(null);
+  const [forgotPin, setForgotPin] = useState('');
+  const [forgotRecoverQ, setForgotRecoverQ] = useState(
+    'Siapa nama hewan peliharaanmu?',
+  );
+  const [forgotRecoverA, setForgotRecoverA] = useState('');
+  const [parentEmailDraft, setParentEmailDraft] = useState('');
   const [err, setErr] = useState<string | null>(null);
   const [pinIsSet, setPinIsSet] = useState<boolean | null>(null);
   const [isSuperParent, setIsSuperParent] = useState(false);
@@ -506,12 +715,10 @@ function ParentPage() {
     musicEnabled: boolean;
     sfxEnabled: boolean;
     reduceMotion: boolean;
+    parentEmailMasked: string | null;
+    weeklyEmailOptIn: boolean;
   } | null>(null);
   const [settingsSaved, setSettingsSaved] = useState(false);
-
-  useEffect(() => {
-    api.getProfiles().then(setProfiles);
-  }, []);
 
   useEffect(() => {
     if (step !== 'gate') return;
@@ -519,6 +726,19 @@ function ParentPage() {
       .getPinStatus()
       .then((s) => setPinIsSet(s.pinIsSet))
       .catch(() => setPinIsSet(false));
+  }, [step]);
+
+  useEffect(() => {
+    if (step !== 'forgot') return;
+    setErr(null);
+    setForgotAnswer('');
+    void api
+      .getRecoveryQuestion()
+      .then((d) => setForgotQuestion(d.question))
+      .catch(() => {
+        setForgotQuestion('');
+        setErr('Pemulihan tidak tersedia (PIN belum diatur).');
+      });
   }, [step]);
 
   useEffect(() => {
@@ -537,7 +757,17 @@ function ParentPage() {
           musicEnabled: s.musicEnabled,
           sfxEnabled: s.sfxEnabled,
           reduceMotion: s.reduceMotion,
+          parentEmailMasked: s.parentEmailMasked,
+          weeklyEmailOptIn: s.weeklyEmailOptIn,
         });
+        applyDevicePreferencesToGameFeedback({
+          dailyTimeCapMinutes: s.dailyTimeCapMinutes,
+          breakReminderMinutes: s.breakReminderMinutes,
+          sfxEnabled: s.sfxEnabled,
+          musicEnabled: s.musicEnabled,
+          reduceMotion: s.reduceMotion,
+        });
+        setParentEmailDraft('');
       })
       .catch(() => {
         setIsSuperParent(false);
@@ -607,6 +837,18 @@ function ParentPage() {
         <Button className="w-full" onClick={verify}>
           Masuk
         </Button>
+        {pinIsSet ? (
+          <button
+            type="button"
+            className="w-full text-sm text-neutral-600 underline"
+            onClick={() => {
+              setErr(null);
+              setStep('forgot');
+            }}
+          >
+            Lupa PIN?
+          </button>
+        ) : null}
         <button
           type="button"
           className="w-full text-sm text-primary-600"
@@ -622,6 +864,140 @@ function ParentPage() {
         <a href="/" className="block text-center text-sm text-neutral-600">
           Kembali
         </a>
+      </div>
+    );
+  }
+
+  if (step === 'forgot') {
+    return (
+      <div className="space-y-4 px-4">
+        <h1 className="text-2xl font-bold">Pemulihan PIN</h1>
+        <p className="text-sm text-neutral-600">
+          Jawab pertanyaan pemulihan yang Anda pilih saat mengatur PIN.
+        </p>
+        {forgotQuestion ? (
+          <p className="rounded-xl bg-neutral-100 p-3 text-lg font-medium">
+            {forgotQuestion}
+          </p>
+        ) : null}
+        <label htmlFor="parent-forgot-answer" className="sr-only">
+          Jawaban pemulihan
+        </label>
+        <input
+          id="parent-forgot-answer"
+          className="w-full rounded-xl border px-3 py-3"
+          placeholder="Jawaban Anda"
+          value={forgotAnswer}
+          onChange={(e) => setForgotAnswer(e.target.value)}
+        />
+        {err ? <p className="text-red-600">{err}</p> : null}
+        <Button
+          className="w-full"
+          disabled={!forgotQuestion || forgotAnswer.trim().length < 2}
+          onClick={async () => {
+            setErr(null);
+            try {
+              const res = await api.verifyRecoveryAnswer(forgotAnswer.trim());
+              setRecoveryToken(res.recoveryToken);
+              setStep('forgot-new');
+              setForgotPin('');
+            } catch (e) {
+              setErr(e instanceof Error ? e.message : 'Jawaban tidak cocok');
+            }
+          }}
+        >
+          Lanjut
+        </Button>
+        <button
+          type="button"
+          className="text-sm text-primary-600"
+          onClick={() => {
+            setStep('gate');
+            setForgotAnswer('');
+            setErr(null);
+          }}
+        >
+          Batal
+        </button>
+      </div>
+    );
+  }
+
+  if (step === 'forgot-new') {
+    return (
+      <div className="space-y-3 px-4">
+        <h1 className="text-2xl font-bold">PIN baru</h1>
+        <p className="text-sm text-neutral-600">
+          Token pemulihan aktif ~15 menit. Atur PIN baru dan pertanyaan
+          pemulihan.
+        </p>
+        <label htmlFor="parent-forgot-pin" className="sr-only">
+          PIN baru
+        </label>
+        <input
+          id="parent-forgot-pin"
+          inputMode="numeric"
+          placeholder="PIN baru (4 digit)"
+          className="w-full rounded-xl border px-3 py-3 text-2xl tracking-widest"
+          maxLength={4}
+          value={forgotPin}
+          onChange={(e) =>
+            setForgotPin(e.target.value.replace(/\D/g, '').slice(0, 4))
+          }
+        />
+        <input
+          className="w-full rounded-xl border px-3 py-2"
+          value={forgotRecoverQ}
+          onChange={(e) => setForgotRecoverQ(e.target.value)}
+        />
+        <input
+          className="w-full rounded-xl border px-3 py-2"
+          placeholder="Jawaban singkat pemulihan"
+          value={forgotRecoverA}
+          onChange={(e) => setForgotRecoverA(e.target.value)}
+        />
+        {err ? <p className="text-red-600">{err}</p> : null}
+        <Button
+          className="w-full"
+          disabled={
+            forgotPin.length !== 4 ||
+            forgotRecoverQ.trim().length < 3 ||
+            forgotRecoverA.trim().length < 2 ||
+            !recoveryToken
+          }
+          onClick={async () => {
+            if (!recoveryToken) return;
+            setErr(null);
+            try {
+              const res = await api.resetPinWithRecovery({
+                recoveryToken,
+                pin: forgotPin,
+                recoveryQuestion: forgotRecoverQ.trim(),
+                recoveryAnswer: forgotRecoverA.trim(),
+              });
+              setSession(res.sessionToken);
+              setRecoveryToken(null);
+              setStep('app');
+              setForgotPin('');
+              setForgotRecoverA('');
+            } catch (e) {
+              setErr(e instanceof Error ? e.message : 'Gagal menyimpan PIN');
+            }
+          }}
+        >
+          Simpan PIN baru
+        </Button>
+        <button
+          type="button"
+          className="text-sm text-primary-600"
+          onClick={() => {
+            setStep('forgot');
+            setRecoveryToken(null);
+            setErr(null);
+          }}
+        >
+          Kembali
+        </button>
       </div>
     );
   }
@@ -719,11 +1095,92 @@ function ParentPage() {
         ))}
       </div>
       {report ? (
-        <div className="rounded-2xl bg-white p-4 shadow">
-          <p className="font-bold">Total XP: {String(report.totalXp ?? '')}</p>
-          <p className="text-sm text-neutral-600">
-            Aktivitas selesai: {String(report.totalActivitiesCompleted ?? '')}
-          </p>
+        <div className="space-y-3">
+          <div className="rounded-2xl bg-white p-4 shadow">
+            <p className="font-bold">
+              {String((report.child as { name?: string })?.name ?? 'Anak')}
+            </p>
+            <p className="mt-1 font-semibold">
+              Total XP: {String(report.totalXp ?? '')}
+            </p>
+            <p className="text-sm text-neutral-600">
+              Aktivitas selesai (≥1★):{' '}
+              {String(report.totalActivitiesCompleted ?? '')}
+            </p>
+          </div>
+
+          <div className="rounded-2xl bg-white p-4 shadow">
+            <p className="font-bold">Literasi vs matematika</p>
+            <div className="mt-2 space-y-2">
+              {(
+                (report.perTrack as Array<{
+                  track: string;
+                  levelsMastered: number;
+                  activitiesCompleted: number;
+                  averageStars: number;
+                }>) ?? []
+              ).map((row) => (
+                <div
+                  key={row.track}
+                  className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-neutral-50 px-3 py-2 text-sm"
+                >
+                  <span className="font-medium">
+                    {row.track === 'literasi' ? 'Literasi' : 'Matematika'}
+                  </span>
+                  <span className="text-neutral-700">
+                    ⌀ {row.averageStars}★ · {row.activitiesCompleted} aktivitas
+                    · level sempurna: {row.levelsMastered}
+                  </span>
+                </div>
+              ))}
+            </div>
+            <p className="mt-2 text-xs text-neutral-600">
+              Bandingkan rata-rata bintang: jalur dengan nilai lebih rendah
+              biasanya perlu latihan tambahan.
+            </p>
+          </div>
+
+          {(
+            (report.replayRecommendations as Array<{
+              activityId: string;
+              title: string;
+              track: string;
+              bestStars: number;
+            }>) ?? []
+          ).length > 0 ? (
+            <div className="rounded-2xl bg-white p-4 shadow">
+              <p className="font-bold">Sarankan dimainkan ulang</p>
+              <p className="text-xs text-neutral-600">
+                Berdasarkan bintang terendah (fokus perbaikan).
+              </p>
+              <ul className="mt-2 space-y-2">
+                {(
+                  (report.replayRecommendations as Array<{
+                    activityId: string;
+                    title: string;
+                    track: string;
+                    bestStars: number;
+                  }>) ?? []
+                ).map((r) => {
+                  const cid = (report.child as { id: string }).id;
+                  return (
+                    <li key={r.activityId}>
+                      <a
+                        className="block rounded-xl bg-primary-50 px-3 py-2 text-sm font-medium text-primary-900 ring-1 ring-primary-100"
+                        href={`/p/${cid}/play/${r.activityId}`}
+                      >
+                        {r.title}
+                        <span className="ml-2 text-xs font-normal text-neutral-600">
+                          {r.track === 'literasi' ? 'Literasi' : 'Math'} ·{' '}
+                          {r.bestStars}★
+                        </span>
+                      </a>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          ) : null}
         </div>
       ) : null}
 
@@ -734,6 +1191,64 @@ function ParentPage() {
             Batas waktu & pengingat istirahat berlaku saat anak bermain (sesi
             terpasang).
           </p>
+          <label className="block text-sm">
+            <span className="text-neutral-700">Email ringkasan mingguan</span>
+            {parentSettings.parentEmailMasked ? (
+              <span className="mt-0.5 block text-xs text-neutral-500">
+                Tersimpan: {parentSettings.parentEmailMasked}
+              </span>
+            ) : null}
+            <input
+              type="email"
+              autoComplete="email"
+              className="mt-1 w-full rounded-xl border px-3 py-2"
+              placeholder="nama@email.com"
+              value={parentEmailDraft}
+              onChange={(e) => setParentEmailDraft(e.target.value)}
+            />
+          </label>
+          {parentSettings.parentEmailMasked ? (
+            <button
+              type="button"
+              className="text-xs font-medium text-red-700 underline"
+              onClick={async () => {
+                if (!session) return;
+                setErr(null);
+                try {
+                  await api.patchParentSettings(session, {
+                    parentEmail: null,
+                    weeklyEmailOptIn: false,
+                  });
+                  setParentSettings((prev) =>
+                    prev
+                      ? {
+                          ...prev,
+                          parentEmailMasked: null,
+                          weeklyEmailOptIn: false,
+                        }
+                      : prev,
+                  );
+                  setParentEmailDraft('');
+                } catch {
+                  setErr('Gagal menghapus email');
+                }
+              }}
+            >
+              Hapus email tersimpan
+            </button>
+          ) : null}
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={parentSettings.weeklyEmailOptIn}
+              onChange={(e) =>
+                setParentSettings((prev) =>
+                  prev ? { ...prev, weeklyEmailOptIn: e.target.checked } : prev,
+                )
+              }
+            />
+            Kirim ringkasan mingguan (perlu RESEND di server + cron)
+          </label>
           <label className="block text-sm">
             <span className="text-neutral-700">
               Batas main harian: {parentSettings.dailyTimeCapMinutes} menit
@@ -823,13 +1338,41 @@ function ParentPage() {
               if (!session || !parentSettings) return;
               setSettingsSaved(false);
               try {
-                await api.patchParentSettings(session, parentSettings);
-                applyDevicePreferencesToGameFeedback({
+                const saved = await api.patchParentSettings(session, {
                   dailyTimeCapMinutes: parentSettings.dailyTimeCapMinutes,
                   breakReminderMinutes: parentSettings.breakReminderMinutes,
                   sfxEnabled: parentSettings.sfxEnabled,
                   musicEnabled: parentSettings.musicEnabled,
                   reduceMotion: parentSettings.reduceMotion,
+                  weeklyEmailOptIn: parentSettings.weeklyEmailOptIn,
+                  ...(parentEmailDraft.trim()
+                    ? { parentEmail: parentEmailDraft.trim() }
+                    : {}),
+                });
+                setParentSettings((prev) =>
+                  prev
+                    ? {
+                        ...prev,
+                        dailyTimeCapMinutes: saved.dailyTimeCapMinutes,
+                        breakReminderMinutes: saved.breakReminderMinutes,
+                        musicEnabled: saved.musicEnabled,
+                        sfxEnabled: saved.sfxEnabled,
+                        reduceMotion: saved.reduceMotion,
+                        parentEmailMasked: saved.parentEmailMasked,
+                        weeklyEmailOptIn: saved.weeklyEmailOptIn,
+                      }
+                    : prev,
+                );
+                setParentEmailDraft('');
+                applyDevicePreferencesToGameFeedback({
+                  dailyTimeCapMinutes: saved.dailyTimeCapMinutes,
+                  breakReminderMinutes: saved.breakReminderMinutes,
+                  sfxEnabled: saved.sfxEnabled,
+                  musicEnabled: saved.musicEnabled,
+                  reduceMotion: saved.reduceMotion,
+                });
+                void queryClient.invalidateQueries({
+                  queryKey: ['devicePreferences'],
                 });
                 setSettingsSaved(true);
               } catch {
@@ -863,239 +1406,106 @@ function ParentPage() {
 
 // === Admin Routes ===
 
-function AdminDashboardPage() {
-  const [data, setData] = useState<Awaited<
-    ReturnType<typeof adminApi.getOverview>
-  > | null>(null);
-  const [err, setErr] = useState<string | null>(null);
-
-  useEffect(() => {
-    adminApi
-      .getOverview()
-      .then(setData)
-      .catch((e: unknown) =>
-        setErr(e instanceof Error ? e.message : 'Gagal memuat ringkasan'),
-      );
-  }, []);
-
-  const r1 =
-    data?.retentionD1Pct == null
-      ? '—'
-      : `${data.retentionD1Pct}% · n=${data.retentionCohortD1}`;
-  const r7 =
-    data?.retentionD7Pct == null
-      ? '—'
-      : `${data.retentionD7Pct}% · n=${data.retentionCohortD7}`;
-
+function AdminShellRoute() {
   return (
-    <div className="space-y-8">
-      <div>
-        <h1 className="text-3xl font-bold">Dashboard Admin</h1>
-        <p className="mt-1 text-neutral-600">
-          Lima metrik utama MVP + ringkasan pengguna.
-        </p>
-        {data?._cached ? (
-          <p className="mt-1 text-xs text-neutral-400">
-            Angka dari cache (≤5 menit).
-          </p>
-        ) : null}
-      </div>
-      {err ? <p className="text-red-600 text-sm">{err}</p> : null}
-
-      <section>
-        <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-neutral-500">
-          Metrik utama (PRD §7)
-        </h2>
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
-          <DashCard label="DAU (hari ini)" value={data?.dauToday} />
-          <DashCard label="MAU (30 hari)" value={data?.mau30d} />
-          <DashCard label="Retensi D1" value={r1} />
-          <DashCard label="Retensi D7" value={r7} />
-          <DashCard
-            label="Total waktu main"
-            value={
-              data != null ? `${data.totalPlayTimeMinutes} menit` : undefined
-            }
-          />
-        </div>
-      </section>
-
-      <section>
-        <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-neutral-500">
-          Ringkasan
-        </h2>
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-          <DashCard label="Total anak" value={data?.totalAnak} />
-          <DashCard label="Total sesi main" value={data?.totalSessions} />
-          <DashCard
-            label="Rata-rata bintang (global)"
-            value={data?.avgStarsGlobal}
-          />
-        </div>
-      </section>
-
-      <p className="text-sm text-neutral-500">
-        Tabel penyelesaian level & bintang per aktivitas ada di halaman{' '}
-        <Link
-          to="/admin/analytics"
-          className="font-medium text-primary-600 hover:underline"
-        >
-          Analytics
-        </Link>
-        .
-      </p>
-      <p className="italic text-neutral-500">
-        Selamat datang di {BRAND_ADMIN}.
-      </p>
-    </div>
+    <AdminSuspense>
+      <AdminShell />
+    </AdminSuspense>
   );
 }
 
-function DashCard({
-  label,
-  value,
-}: {
-  label: string;
-  value: string | number | undefined;
-}) {
+function AdminLoginShell() {
   return (
-    <div className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm">
-      <p className="text-xs font-semibold uppercase text-neutral-500">
-        {label}
-      </p>
-      <p className="mt-2 text-3xl font-bold tabular-nums">
-        {value === undefined ? '…' : String(value)}
-      </p>
-    </div>
+    <AdminSuspense>
+      <AdminLoginPage />
+    </AdminSuspense>
   );
 }
 
-function AdminChildrenPage() {
-  const { data: session } = authClient.useSession();
-  const role = session?.user?.role ?? '';
-  const canDeleteChild = role === 'super_admin' || role === 'content_editor';
-
-  const [rows, setRows] = useState<
-    Awaited<ReturnType<typeof adminApi.getChildren>>
-  >([]);
-  const [err, setErr] = useState<string | null>(null);
-  const [deletingId, setDeletingId] = useState<string | null>(null);
-
-  const load = useCallback(() => {
-    adminApi
-      .getChildren()
-      .then(setRows)
-      .catch((e: unknown) =>
-        setErr(e instanceof Error ? e.message : 'Gagal memuat daftar anak'),
-      );
-  }, []);
-
-  useEffect(() => {
-    load();
-  }, [load]);
-
-  const handleDelete = async (id: string, name: string) => {
-    if (
-      !globalThis.confirm(
-        `Hapus profil "${name}" beserta progresnya? Tindakan ini tidak bisa dibatalkan.`,
-      )
-    ) {
-      return;
-    }
-    setErr(null);
-    setDeletingId(id);
-    try {
-      await adminApi.deleteChild(id);
-      setRows((prev) => prev.filter((r) => r.id !== id));
-    } catch (e: unknown) {
-      setErr(e instanceof Error ? e.message : 'Gagal menghapus profil');
-    } finally {
-      setDeletingId(null);
-    }
-  };
-
+function AdminSignupShell() {
   return (
-    <div className="space-y-6">
-      <h1 className="text-3xl font-bold">Manajemen Anak</h1>
-      <p className="text-neutral-600">
-        Daftar profil anak di perangkat ini (sumber:{' '}
-        <code className="rounded bg-neutral-100 px-1">
-          GET /api/admin/children
-        </code>
-        ).
-      </p>
-      {canDeleteChild ? (
-        <p className="text-sm text-neutral-500">
-          Super admin dan editor konten dapat menghapus profil dari tabel di
-          bawah.
-        </p>
-      ) : null}
-      {err ? <p className="text-sm text-red-600">{err}</p> : null}
-      <div className="overflow-x-auto rounded-2xl border border-neutral-200 bg-white">
-        <table className="min-w-full text-left text-sm">
-          <thead className="border-b border-neutral-100 bg-neutral-50">
-            <tr>
-              <th className="px-4 py-3 font-semibold">Nama</th>
-              <th className="px-4 py-3 font-semibold">Mode</th>
-              <th className="px-4 py-3 font-semibold">Avatar</th>
-              <th className="px-4 py-3 font-semibold w-[1%] whitespace-nowrap">
-                Aksi
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((p) => (
-              <tr key={p.id} className="border-b border-neutral-50">
-                <td className="px-4 py-3">
-                  <Link
-                    to="/admin/children/$childId"
-                    params={{ childId: p.id }}
-                    className="font-medium text-primary-600 hover:underline"
-                  >
-                    {p.name}
-                  </Link>
-                </td>
-                <td className="px-4 py-3">{p.ageMode}</td>
-                <td className="px-4 py-3 font-mono text-xs">{p.avatarKey}</td>
-                <td className="px-4 py-3">
-                  {canDeleteChild ? (
-                    <Button
-                      variant="secondary"
-                      className="min-h-10 min-w-0 px-3 py-2 text-sm text-red-700 border-red-200 hover:bg-red-50"
-                      disabled={deletingId !== null}
-                      onClick={() => handleDelete(p.id, p.name)}
-                    >
-                      {deletingId === p.id ? 'Menghapus…' : 'Hapus'}
-                    </Button>
-                  ) : (
-                    <span className="text-neutral-400">—</span>
-                  )}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        {!err && rows.length === 0 ? (
-          <p className="px-4 py-6 text-center text-neutral-400">
-            Belum ada profil anak.
-          </p>
-        ) : null}
-      </div>
-    </div>
+    <AdminSuspense>
+      <AdminSignupPage />
+    </AdminSuspense>
+  );
+}
+
+function AdminDashboardShell() {
+  return (
+    <AdminSuspense>
+      <AdminDashboardRoutePage />
+    </AdminSuspense>
+  );
+}
+
+function AdminChildrenShell() {
+  return (
+    <AdminSuspense>
+      <AdminChildrenRoutePage />
+    </AdminSuspense>
+  );
+}
+
+function AdminAuditShell() {
+  return (
+    <AdminSuspense>
+      <AdminAuditPage />
+    </AdminSuspense>
+  );
+}
+
+function AdminContentShell() {
+  return (
+    <AdminSuspense>
+      <AdminContentPage />
+    </AdminSuspense>
+  );
+}
+
+function AdminAnalyticsShell() {
+  return (
+    <AdminSuspense>
+      <AdminAnalyticsPage />
+    </AdminSuspense>
+  );
+}
+
+function AdminSettingsShell() {
+  return (
+    <AdminSuspense>
+      <AdminSettingsPage />
+    </AdminSuspense>
+  );
+}
+
+function AdminImportExportShell() {
+  return (
+    <AdminSuspense>
+      <AdminImportExportPage />
+    </AdminSuspense>
+  );
+}
+
+function AdminUsersShell() {
+  return (
+    <AdminSuspense>
+      <AdminUsersPage />
+    </AdminSuspense>
   );
 }
 
 const adminRootRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/admin',
-  component: AdminShell,
+  component: AdminShellRoute,
   beforeLoad: async ({ location }) => {
     // Only redirect to login if not already on login page
     const session = await authClient.getSession();
     if (
       !session &&
       location.pathname !== '/admin/login' &&
-      location.pathname !== '/admin/signup'
+      location.pathname !== '/admin/signup' &&
+      location.pathname !== '/admin/two-factor'
     ) {
       throw redirect({ to: '/admin/login' });
     }
@@ -1105,25 +1515,25 @@ const adminRootRoute = createRoute({
 const adminLoginRoute = createRoute({
   getParentRoute: () => adminRootRoute,
   path: '/login',
-  component: AdminLoginPage,
+  component: AdminLoginShell,
 });
 
 const adminSignupRoute = createRoute({
   getParentRoute: () => adminRootRoute,
   path: '/signup',
-  component: AdminSignupPage,
+  component: AdminSignupShell,
 });
 
 const adminIndexRoute = createRoute({
   getParentRoute: () => adminRootRoute,
   path: '/',
-  component: AdminDashboardPage,
+  component: AdminDashboardShell,
 });
 
 const adminChildrenRoute = createRoute({
   getParentRoute: () => adminRootRoute,
   path: '/children',
-  component: AdminChildrenPage,
+  component: AdminChildrenShell,
 });
 
 const adminChildDetailRoute = createRoute({
@@ -1134,19 +1544,23 @@ const adminChildDetailRoute = createRoute({
 
 function AdminChildDetailShell() {
   const { childId } = adminChildDetailRoute.useParams();
-  return <AdminChildDetailPage childId={childId} />;
+  return (
+    <AdminSuspense>
+      <AdminChildDetailPage childId={childId} />
+    </AdminSuspense>
+  );
 }
 
 const adminAuditRoute = createRoute({
   getParentRoute: () => adminRootRoute,
   path: '/audit',
-  component: AdminAuditPage,
+  component: AdminAuditShell,
 });
 
 const adminContentRoute = createRoute({
   getParentRoute: () => adminRootRoute,
   path: '/content',
-  component: AdminContentPage,
+  component: AdminContentShell,
 });
 
 const adminActivityDetailRoute = createRoute({
@@ -1157,7 +1571,11 @@ const adminActivityDetailRoute = createRoute({
 
 function AdminActivityDetailShell() {
   const { activityId } = adminActivityDetailRoute.useParams();
-  return <AdminActivityEditorPage activityId={activityId} />;
+  return (
+    <AdminSuspense>
+      <AdminActivityEditorPage activityId={activityId} />
+    </AdminSuspense>
+  );
 }
 
 const adminBankRoute = createRoute({
@@ -1168,35 +1586,70 @@ const adminBankRoute = createRoute({
 
 function AdminBankShell() {
   const { activityId } = adminBankRoute.useParams();
-  return <AdminBankEditorPage activityId={activityId} />;
+  return (
+    <AdminSuspense>
+      <AdminBankEditorPage activityId={activityId} />
+    </AdminSuspense>
+  );
 }
+
+function AdminTwoFactorShell() {
+  return (
+    <AdminSuspense>
+      <AdminTwoFactorPage />
+    </AdminSuspense>
+  );
+}
+
+const adminActivityPreviewRoute = createRoute({
+  getParentRoute: () => adminRootRoute,
+  path: '/activities/$activityId/preview',
+  component: AdminActivityPreviewShell,
+});
+
+function AdminActivityPreviewShell() {
+  const { activityId } = adminActivityPreviewRoute.useParams();
+  return (
+    <AdminSuspense>
+      <AdminActivityPreviewPage activityId={activityId} />
+    </AdminSuspense>
+  );
+}
+
+const adminTwoFactorRoute = createRoute({
+  getParentRoute: () => adminRootRoute,
+  path: '/two-factor',
+  component: AdminTwoFactorShell,
+});
 
 const adminAnalyticsRoute = createRoute({
   getParentRoute: () => adminRootRoute,
   path: '/analytics',
-  component: AdminAnalyticsPage,
+  component: AdminAnalyticsShell,
 });
 
 const adminSettingsRoute = createRoute({
   getParentRoute: () => adminRootRoute,
   path: '/settings',
-  component: AdminSettingsPage,
+  component: AdminSettingsShell,
 });
 
 const adminImportExportRoute = createRoute({
   getParentRoute: () => adminRootRoute,
   path: '/import-export',
-  component: AdminImportExportPage,
+  component: AdminImportExportShell,
 });
 
 const adminUsersRoute = createRoute({
   getParentRoute: () => adminRootRoute,
   path: '/users',
-  component: AdminUsersPage,
+  component: AdminUsersShell,
 });
 
 const routeTree = rootRoute.addChildren([
   indexRoute,
+  authSignUpRoute,
+  authSignInRoute,
   onboardingRoute,
   childRoute,
   trackRoute,
@@ -1209,11 +1662,13 @@ const routeTree = rootRoute.addChildren([
     adminIndexRoute,
     adminLoginRoute,
     adminSignupRoute,
+    adminTwoFactorRoute,
     adminChildrenRoute,
     adminChildDetailRoute,
     adminAuditRoute,
     adminContentRoute,
     adminActivityDetailRoute,
+    adminActivityPreviewRoute,
     adminBankRoute,
     adminAnalyticsRoute,
     adminSettingsRoute,

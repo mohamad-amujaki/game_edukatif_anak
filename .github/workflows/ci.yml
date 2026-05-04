@@ -8,6 +8,12 @@ on:
 env:
   DATABASE_URL: postgresql://postgres:postgres@localhost:5432/ci
   DATABASE_DIRECT_URL: postgresql://postgres:postgres@localhost:5432/ci
+  # Playwright `pnpm dev` memakai VITE di 43121; samakan origin Better Auth.
+  BETTER_AUTH_SECRET: ci-development-better-auth-secret-min-length-32
+  BETTER_AUTH_URL: http://127.0.0.1:43121
+  PIN_HASH_PEPPER: ci-pin-pepper-hash-32-character-minimum-x
+  E2E_ADMIN_EMAIL: e2e-admin@ci.local
+  E2E_ADMIN_PASSWORD: 'E2eAdminSecureTest1!'
 
 jobs:
   ci:
@@ -42,7 +48,13 @@ jobs:
 
       - run: pnpm exec prisma migrate deploy
 
+      - run: pnpm db:seed
+
+      - run: pnpm admin:create -- --email "$E2E_ADMIN_EMAIL" --password "$E2E_ADMIN_PASSWORD"
+
       - run: pnpm check
+
+      - run: pnpm run bank:validate
 
       - run: pnpm test
 

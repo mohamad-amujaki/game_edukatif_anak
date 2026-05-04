@@ -1,3 +1,4 @@
+import { useActivityVoice } from '@/contexts/ActivityVoiceContext';
 import {
   GAME_FEEDBACK_SYNC_EVENT,
   LS_MUSIC,
@@ -71,6 +72,15 @@ function playWrongSoft(): void {
   o.stop(t0 + 0.23);
 }
 
+async function playOneUrlFromPool(urls: string[] | undefined): Promise<void> {
+  if (!urls?.length || !effectiveSfxEnabled()) return;
+  const u = urls[Math.floor(Math.random() * urls.length)];
+  if (!u) return;
+  const a = new Audio(u);
+  a.volume = 0.88;
+  await a.play().catch(() => {});
+}
+
 function burstConfetti(): void {
   if (effectiveReducedMotion()) return;
   confetti({
@@ -85,6 +95,7 @@ function burstConfetti(): void {
 }
 
 export function useGameFeedback() {
+  const voice = useActivityVoice();
   const lastWrongAt = useRef(0);
   const [correctPulse, setCorrectPulse] = useState(false);
   const [, setSyncGen] = useState(0);
@@ -112,21 +123,31 @@ export function useGameFeedback() {
 
   const celebrateCorrect = useCallback(async () => {
     await resumeAudio();
-    playCorrectTone();
+    const pool = voice?.correct;
+    if (pool?.length) {
+      await playOneUrlFromPool(pool);
+    } else {
+      playCorrectTone();
+    }
     if (effectiveReducedMotion()) {
       setCorrectPulse(true);
     } else {
       burstConfetti();
     }
-  }, []);
+  }, [voice?.correct]);
 
   const warnWrong = useCallback(async () => {
     const now = Date.now();
     if (now - lastWrongAt.current < WRONG_THROTTLE_MS) return;
     lastWrongAt.current = now;
     await resumeAudio();
+    const wrongPool = voice?.wrong;
+    if (wrongPool?.length && effectiveSfxEnabled()) {
+      await playOneUrlFromPool(wrongPool);
+      return;
+    }
     playWrongSoft();
-  }, []);
+  }, [voice?.wrong]);
 
   const motionSafeRing = correctPulse
     ? 'ring-4 ring-math-400/50 scale-[1.02] transition-transform duration-300'

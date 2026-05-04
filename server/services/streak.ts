@@ -1,4 +1,4 @@
-import { prisma } from '../db';
+import { type DbClient, defaultDb } from '../db-client';
 
 function todayKey(): string {
   return new Date().toISOString().slice(0, 10);
@@ -15,12 +15,14 @@ function addDays(ymd: string, delta: number): string {
  */
 export async function updateStreakAfterPlay(
   childId: string,
+  db?: DbClient,
 ): Promise<{ streakBonus: boolean }> {
+  const d = defaultDb(db);
   const today = todayKey();
-  const streak = await prisma.dailyStreak.findUnique({ where: { childId } });
+  const streak = await d.dailyStreak.findUnique({ where: { childId } });
 
   if (!streak) {
-    await prisma.dailyStreak.create({
+    await d.dailyStreak.create({
       data: {
         childId,
         currentStreak: 1,
@@ -46,7 +48,7 @@ export async function updateStreakAfterPlay(
 
   const longest = Math.max(streak.longestStreak, newStreak);
 
-  await prisma.dailyStreak.update({
+  await d.dailyStreak.update({
     where: { childId },
     data: {
       currentStreak: newStreak,

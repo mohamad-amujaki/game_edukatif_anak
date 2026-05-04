@@ -1,4 +1,6 @@
 import { type AdminAuditRow, adminApi } from '@/api-admin';
+import { Button } from '@/components/ui/Button';
+import { downloadAdminCsv } from '@/lib/admin-csv-download';
 import { authClient } from '@/lib/auth-client';
 import { Fragment, useCallback, useEffect, useState } from 'react';
 
@@ -6,7 +8,7 @@ type AuditQueryOpts = {
   fromLocal: string;
   toLocal: string;
   entityType: string;
-  actorTypeFilter: '' | 'ADMIN' | 'SUPER_PARENT';
+  actorTypeFilter: '' | 'ADMIN' | 'SUPER_PARENT' | 'DEVICE';
   isSuper: boolean;
 };
 
@@ -41,7 +43,7 @@ export function AdminAuditPage() {
   const [err, setErr] = useState<string | null>(null);
   const [entityType, setEntityType] = useState('');
   const [actorTypeFilter, setActorTypeFilter] = useState<
-    '' | 'ADMIN' | 'SUPER_PARENT'
+    '' | 'ADMIN' | 'SUPER_PARENT' | 'DEVICE'
   >('');
   const [fromLocal, setFromLocal] = useState('');
   const [toLocal, setToLocal] = useState('');
@@ -137,16 +139,28 @@ export function AdminAuditPage() {
                 value={actorTypeFilter}
                 onChange={(e) =>
                   setActorTypeFilter(
-                    e.target.value as '' | 'ADMIN' | 'SUPER_PARENT',
+                    e.target.value as '' | 'ADMIN' | 'SUPER_PARENT' | 'DEVICE',
                   )
                 }
               >
                 <option value="">Semua</option>
                 <option value="ADMIN">ADMIN</option>
                 <option value="SUPER_PARENT">SUPER_PARENT</option>
+                <option value="DEVICE">DEVICE</option>
               </select>
             </label>
           </>
+        ) : null}
+        {isSuper ? (
+          <Button
+            type="button"
+            variant="secondary"
+            onClick={() =>
+              void downloadAdminCsv('/api/admin/export/audit.csv', 'audit.csv')
+            }
+          >
+            Ekspor audit CSV (25k terakhir)
+          </Button>
         ) : null}
         <button
           type="button"

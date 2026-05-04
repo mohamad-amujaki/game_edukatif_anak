@@ -11,6 +11,11 @@ model ParentSettings {
   pinHash              String?
   pinSetupQuestion     String?
   pinSetupAnswerHash   String?
+  /// Email orang tua untuk laporan mingguan (plaintext; simpan di lingkungan tepercaya).
+  parentEmail          String?
+  weeklyEmailOptIn     Boolean  @default(false)
+  pinRecoveryTokenHash   String?
+  pinRecoveryTokenExpires DateTime?
   dailyTimeCapMinutes  Int      @default(30)
   breakReminderMinutes Int      @default(15)
   musicEnabled         Boolean  @default(true)
@@ -23,22 +28,38 @@ model ParentSettings {
 
 /// Akun dewasa (panel admin). Dipisah dari `ChildProfile`.
 model User {
-  id            String    @id
-  name          String
-  email         String
-  emailVerified Boolean   @default(false)
-  image         String?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-  role          String?
-  banned        Boolean?  @default(false)
-  banReason     String?
-  banExpires    DateTime?
-  sessions      Session[]
-  accounts      Account[]
+  id                 String         @id
+  name               String
+  email              String
+  emailVerified      Boolean        @default(false)
+  image              String?
+  createdAt          DateTime       @default(now())
+  updatedAt          DateTime       @updatedAt
+  role               String?
+  banned             Boolean?       @default(false)
+  banReason          String?
+  banExpires         DateTime?
+  twoFactorEnabled   Boolean        @default(false)
+  sessions           Session[]
+  accounts           Account[]
+  twoFactor          TwoFactor?
+  /// Profil anak milik orang tua (better-auth cloud); staff admin tidak memakai relasi ini.
+  ownedChildren      ChildProfile[]
 
   @@unique([email])
   @@map("user")
+}
+
+/// Better Auth — plugin two-factor (`@@map("twoFactor")`).
+model TwoFactor {
+  id          String  @id @default(cuid())
+  secret      String
+  backupCodes String
+  userId      String  @unique
+  verified    Boolean @default(true)
+  user        User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("twoFactor")
 }
 
 model Session {
@@ -98,6 +119,12 @@ model ChildProfile {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  /// null = profil tamu (diikat `guestBindingId`); non-null = progres dibawah akun orang tua.
+  ownerUserId     String?
+  ownerUser       User?    @relation(fields: [ownerUserId], references: [id], onDelete: Cascade)
+  /// Opaque token per browser/perangkat (cookie) untuk penyekat profil tamu di server DB.
+  guestBindingId String?
+
   progress       Progress[]
   xpLogs         XpLog[]
   earnedStickers EarnedSticker[]
@@ -107,6 +134,8 @@ model ChildProfile {
   playSessions   PlaySession[]
 
   @@index([createdAt])
+  @@index([ownerUserId])
+  @@index([guestBindingId])
 }
 
 enum AgeMode {
@@ -192,6 +221,7 @@ model LevelMastery {
 
   @@unique([childId, levelId])
   @@index([childId])
+  @@index([levelId])
 }
 
 model XpLog {
@@ -211,6 +241,7 @@ enum XpSource {
   STAR_BONUS
   DAILY_STREAK
   DAILY_QUEST
+  WEEKLY_QUEST
   LEVEL_UP
   REPLAY
 }
@@ -279,6 +310,12 @@ model DailyStreak {
   questTargetActivityIds String?
   /// Tanggal (YYYY-MM-DD UTC) bonus +15 quest harian sudah diberikan
   questBonusDate         String?
+  /// Senin UTC (YYYY-MM-DD) untuk penghitungan quest mingguan
+  weekQuestWeekStart       String?
+  /// JSON string[] — id aktivitas berbeda yang selesai (≥1★) minggu ini
+  weekQuestActivityIdsDone String?
+  /// Senin UTC saat bonus quest mingguan terakhir diberikan
+  weekQuestBonusWeekStart  String?
   updatedAt              DateTime @updatedAt
 }
 
@@ -298,6 +335,16 @@ model PlaySession {
 enum AuditActor {
   ADMIN
   SUPER_PARENT
+  DEVICE
+}
+
+/// Sesi area orang tua (PIN) — persisten agar tahan restart / scale-out.
+model ParentSession {
+  token     String   @id
+  createdAt DateTime @default(now())
+  expiresAt DateTime
+
+  @@index([expiresAt])
 }
 
 model AuditLog {

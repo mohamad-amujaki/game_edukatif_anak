@@ -9,7 +9,7 @@ export const childUpdateSchema = z.object({
 export const auditLogQuerySchema = z.object({
   cursor: z.string().optional(),
   actor: z.string().optional(),
-  actorType: z.enum(['ADMIN', 'SUPER_PARENT']).optional(),
+  actorType: z.enum(['ADMIN', 'SUPER_PARENT', 'DEVICE']).optional(),
   entityType: z.string().optional(),
   from: z.string().optional(),
   to: z.string().optional(),

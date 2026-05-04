@@ -1,6 +1,6 @@
 # PRD — Game Edukatif Anak (TK & SD Kelas I)
 
-**Versi**: 1.0 (MVP)
+**Versi**: 1.1 (revisi: akun orang tua & onboarding)
 **Status**: Draft untuk implementasi
 **Bahasa konten**: Bahasa Indonesia
 **Platform**: Web (PWA)
@@ -16,6 +16,8 @@
 - **Pengguna sekunder**: orang tua / wali yang ingin memantau progres dan mengatur batas waktu bermain.
 
 **Kenapa**: Aplikasi pembelajaran anak yang ada saat ini (Lingokids, Duolingo ABC) sebagian besar berbahasa Inggris dan tidak mengikuti kurikulum lokal. Konten dalam Bahasa Indonesia yang ramah anak, dengan kualitas pedagogis Montessori dan vibe gamifikasi modern, masih jarang.
+
+**Progres disimpan**: mendukung **mode tamu** (progres hanya di perangkat; berisiko hilang jika data browser dibersihkan) dan **mode akun orang tua** (daftar dengan email/kata sandi atau Google; progres profil anak disimpan di server sehingga selaras antar-perangkat saat online). Setelah masuk, **maksimal 4 profil anak per akun**.
 
 **Pendekatan inti**:
 - Lini belajar bertingkat berbasis **mastery** (Montessori).
@@ -57,7 +59,7 @@
 
 - **Tujuan**: anak belajar sambil bermain dengan aman (tanpa iklan, tanpa interaksi orang asing).
 - **Kebiasaan**: memberi anak gadget 20–30 menit/hari, sering tidak sempat memantau detail.
-- **Kebutuhan**: dashboard sederhana untuk melihat "anak saya sudah belajar apa hari ini" dan kontrol batas waktu.
+- **Kebutuhan**: dashboard sederhana untuk melihat "anak saya sudah belajar apa hari ini" dan kontrol batas waktu; opsional **akun** agar progres tidak hilang saat ganti perangkat.
 - **Tidak butuh**: laporan analitik kompleks, fitur sosial.
 
 ---
@@ -110,11 +112,12 @@ Empat prinsip yang harus tercermin di setiap fitur:
 | Jalur belajar     | Literasi & Matematika                                                                                               |
 | Konten            | 3 level pertama × 2 jalur × 2 mode = **12 level**, masing-masing 1–2 aktivitas (total ~18 aktivitas)                |
 | Jenis mini-game   | 7 jenis (lihat [content-design.md](content-design.md))                                                              |
-| Profil anak       | Multi-profil lokal (max 4 anak/device), dengan nama & avatar                                                        |
+| Profil anak       | Multi-profil: **tamu** max 4 per perangkat (progres lokal); **ber-akun** max 4 per akun orang tua (progres server)   |
+| Akun orang tua    | Daftar/masuk: **email + kata sandi** atau **Google**; sesi server (cookie); keluar dari akun                       |
 | Reward            | Bintang per aktivitas (1–3), XP, streak harian sederhana, sticker album, badge dasar                                |
 | Audio             | Voice-over Bahasa Indonesia untuk semua instruksi & feedback aktivitas                                              |
 | Parent area       | Dilindungi PIN 4 digit; berisi laporan progres per anak, pengaturan time cap & break reminder                        |
-| Onboarding        | First-time flow: pilih bahasa (default ID), buat profil pertama, tutorial mini singkat                              |
+| Onboarding        | Lihat §5.3 & §8.1: gate selamat datang (tamu vs akun), buat profil, PIN orang tua, tutorial mini anak (default ID)   |
 | Wellness          | Reminder break tiap 15 menit (default), daily time cap (default 30 menit)                                           |
 | Offline           | PWA installable; semua asset & konten level di-cache, bisa main tanpa internet setelah load pertama                 |
 | Settings          | Toggle musik, toggle SFX, atur volume, atur reminder, ganti avatar                                                  |
@@ -123,12 +126,45 @@ Empat prinsip yang harus tercermin di setiap fitur:
 
 - Bilingual (Inggris).
 - Level 4–10 (akan ditambah bertahap).
-- Multi-device sync / cloud save (butuh akun cloud, di luar scope).
-- Parent account dengan email/password.
+- Provider login sosial selain **Google** (Apple, Facebook, dll.) kecuali ditambah di phase berikutnya.
+- **Migrasi otomatis** progres tamu → akun (bisa ditunda; lihat §5.3).
 - Achievement/leaderboard sosial.
 - Konten sains, sosial, atau seni.
 - AI tutor / personalisasi adaptif berbasis ML.
 - Pembelian dalam aplikasi / monetisasi.
+
+### 5.3 Akun orang tua, mode tamu, dan penyimpanan progres (disarankan untuk rilis setelah inti permainan)
+
+**Tujuan**: orang tua dapat **menyimpan progres** profil anak di server; tanpa akun, aplikasi tetap dapat dipakai dengan progres **hanya pada perangkat**.
+
+**Mode pengguna**:
+
+| Mode | Siapa yang daftar/masuk | Batas profil anak | Sumber kebenaran progres |
+| ---- | ------------------------ | ----------------- | ------------------------ |
+| Tamu | Tidak                    | Max 4 per **cookie tamu** per peramban               | Progres di server tetapi **scoped** ke perangkat/peramban (cookie `kid_guest_binding`); tidak ikut akun orang tua / tidak antar-akun |
+| Akun | Orang tua (bukan anak)   | Max **4 total** per akun | Server; perlu sesi sah. **Offline + akun**: kirim aktivitas tetap membutuhkan jaringan; tanpa itu simpan tidak diperbarui (antrian klien = backlog). |
+
+**Autentikasi orang tua** (bukan alur untuk anak kecil):
+
+- **Daftar**: form email, kata sandi (kekuatan minimal + konfirmasi), centang syarat & kebijakan privasi.
+- **Masuk**: email + kata sandi; tautan/pemulihan kata sandi (sesuai kemampuan stack auth).
+- **Google**: satu tombol *Sign up / Sign in with Google* (OAuth).
+- Tidak ada leaderboard atau profil publik anak berdasarkan email orang tua.
+
+**Aturan bisnis**:
+
+- Pembuatan profil anak ke-5 untuk akun yang sama ditolak dengan pesan jelas (dan kode kesalahan API konsisten).
+- Semua endpoint yang menulis **progres** untuk mode akun wajib memverifikasi: `childProfile` milik `userId` sesi tersebut (otorisasi per sumber daya).
+
+**Onboarding penyelarasan** (urutan tinggi):
+
+1. **Halaman utama `/`**: beranda pemilih profil (**tamu** default); tautan/menu **Daftar**, **Masuk**, Google bersifat **opsional** (banner atau rute **`/auth/*`**).
+2. **Jalur akun (pertama kali setelah daftar/masuk Google)**: buat profil anak pertama (nama, avatar, mode TK/SD-1), lalu tetap **`Set PIN orang tua` (4 digit)**, lalu **tutorial mini anak** (tap/geser — perilaku sama dengan implementasi sekarang per `childId`).
+3. **Jalur tamu**: langsung buat profil (sama secara UX seperti sekarang) → PIN sama seperti §8.3 → tutorial anak.
+
+**Migrasi tamu → akun** (opsional backlog): tidak wajib rilis pertama; jika dilakukan, definisikan apakah merge per profil atau “mulai bersih” untuk menghindari konflik ID.
+
+**Catatan implementasi (repo)**: `ChildProfile` memiliki `ownerUserId` (akun orang tua) dan `guestBindingId` (tamu + cookie HttpOnly). Pendaftar better-auth publik memakai `role: parent`; admin bootstrap lewat `pnpm admin:create`. Rincian API: [api-contracts.md](api-contracts.md).
 
 ---
 
@@ -212,17 +248,40 @@ XP bersifat **kumulatif sepanjang umur profil**, tidak pernah berkurang. Digunak
 
 ### 8.1 Onboarding (First Time)
 
+**Prinsip**: **default utama** bermain sebagai tamu dari halaman utama; orang tua memilih **Daftar/Masuk** bila menginginkan progres pada akun. Anak melewati **tutorial interaksi** setelah profil ada.
+
+#### 8.1.1 Pembuka aplikasi — beranda utama (default tamu)
+
 ```mermaid
 flowchart TD
-    Start([Buka aplikasi pertama kali]) --> Welcome[Layar selamat datang + narasi suara]
-    Welcome --> CreateProfile[Buat profil pertama]
-    CreateProfile --> InputName[Input nama anak<br/>orang tua mengetik]
-    InputName --> SelectAvatar[Pilih avatar dari gallery<br/>anak yang memilih]
-    SelectAvatar --> SelectMode[Pilih mode: TK atau SD-1<br/>orang tua memilih]
-    SelectMode --> SetParentPin[Set PIN orang tua 4 digit]
-    SetParentPin --> Tutorial[Tutorial mini: cara tap, cara drag]
-    Tutorial --> Dashboard[Masuk ke dashboard anak]
+    Start([Buka aplikasi utama]) --> Home[Beranda pemilih profil<br/>tamu secara default]
+    Home --> Choice{Aksi orang tua?}
+    Choice -->|"Opsional"| SignUp[Daftar email kata sandi]
+    Choice -->|"Opsional"| SignIn[Masuk email kata sandi]
+    Choice -->|"Opsional"| Google[Sign up atau sign in dengan Google]
+    Choice --> Skip[Lanjut buat atau pilih profil tanpa akun]
+    SignUp --> AuthOk[Sesi orang tua aktif]
+    SignIn --> AuthOk
+    Google --> AuthOk
+    Skip --> CreateGuest[Buat atau pilih profil<br/>dibawah cookie tamu]
+    AuthOk --> CreateAccount[Buat atau pilih profil<br/>dibawah akun max 4]
 ```
+
+#### 8.1.2 Setelah profil pertama ada (kedua jalur)
+
+```mermaid
+flowchart TD
+    ProfileReady([Profil anak pertama siap]) --> InputName[Nama dipilih orang tua mengetik]
+    InputName --> SelectAvatar[Pilih avatar dari gallery anak membantu]
+    SelectAvatar --> SelectMode[Pilih mode TK atau SD-1 orang tua]
+    SelectMode --> SetParentPin[Set PIN orang tua 4 digit]
+    SetParentPin --> Tutorial[Tutorial mini tap dan geser satu kali per profil]
+    Tutorial --> Dashboard[Dashboard anak]
+```
+
+**Salinan UI**: jalur akun bisa menambahkan satu kalimat bahwa **progres tersimpan ke akun**; jalur tamu menampilkan pengingat ringan (“Progres hanya di perangkat ini”) tanpa menghukum.
+
+**Bahasa aplikasi konten**: default Bahasa Indonesia; pemilih bahasa bisa tetap backlog jika belum ada di UI.
 
 ### 8.2 Daily Play Loop
 
@@ -327,23 +386,27 @@ Mengacu pada **UU PDP No. 27 Tahun 2022** Indonesia + best practice global (COPP
 
 ### 11.1 Prinsip
 
-1. **Data minimization**: hanya simpan nama (boleh nama panggilan, tidak harus nama asli) & avatar. Tidak ada email, telepon, lokasi, foto, suara.
-2. **Local-first**: semua data anak disimpan di SQLite lokal di server aplikasi (atau di file local pada deployment self-hosted). Tidak ada cloud sync di MVP.
-3. **No third-party tracker**: tidak ada Google Analytics, Facebook Pixel, atau SDK pihak ketiga. Untuk telemetry, gunakan log lokal sederhana (opt-in via parent settings).
-4. **No ads**: tidak pernah ada iklan, baik pihak ketiga maupun internal.
-5. **No social/chat**: tidak ada fitur chat, leaderboard publik, atau interaksi antar pengguna.
-6. **No external links**: aplikasi tidak membuka link eksternal saat anak sedang dalam mode anak. Link kebijakan privasi & dukungan hanya dari parent area.
+1. **Data minimization (anak)**: untuk profil anak, hanya simpan nama panggilan (opsional) & avatar preset; tidak menyimpan foto wajah, rekaman suara anak, lokasi presisi, atau meta yang tidak perlu.
+2. **Akun orang tua**: jika dipakai, simpan **email** (dan identitas OAuth yang diberikan Google) sesuai kebutuhan autentikasi; ini **bukan** data profil anak. Kebijakan privasi harus menjelaskan peran orang tua sebagai penanggung jawab akun.
+3. **Penyimpanan progres**: **tamu** — progres anak di perangkat klien (lihat §5.3); **akun** — progres server-side dalam database aplikasi dengan kontrol akses per akun.
+4. **OAuth Google**: hanya untuk login orang tua; tetap hindari penyisipan pelacakan iklan pada alur bermain anak (bedakan dari produk konsumen Google lain).
+5. **No third-party tracker**: tidak ada Google Analytics, Facebook Pixel, atau SDK pihak ketiga pada alur bermain anak. Untuk telemetry agregat, utamakan **opt-in** orang tua jika digunakan.
+6. **No ads**: tidak pernah ada iklan, baik pihak ketiga maupun internal.
+7. **No social/chat**: tidak ada fitur chat, leaderboard publik, atau interaksi antar pengguna.
+8. **No external links**: aplikasi tidak membuka link eksternal saat anak sedang dalam mode anak. Link kebijakan privasi & dukungan hanya dari parent area.
 
 ### 11.2 Yang Disimpan vs Tidak Disimpan
 
-| Disimpan                                           | Tidak Disimpan                          |
-| -------------------------------------------------- | --------------------------------------- |
-| Nama panggilan anak                                | Nama lengkap, NIK, alamat               |
-| Avatar (dipilih dari gallery preset)               | Foto asli                               |
-| Mode (TK/SD-1) & tanggal pembuatan profil          | Tanggal lahir aktual                    |
-| Progres belajar (level, bintang, XP)               | Identitas orang tua (nama, email)       |
-| Waktu bermain (untuk fitur wellness)               | Lokasi geografis                        |
-| PIN orang tua (di-hash dengan bcrypt/argon2)       | PIN dalam plaintext                     |
+| Disimpan                                                        | Tidak Disimpan (target)                    |
+| --------------------------------------------------------------- | ------------------------------------------ |
+| Nama panggilan anak                                             | Nama lengkap, NIK, alamat                  |
+| Avatar (dipilih dari gallery preset)                            | Foto asli anak                             |
+| Mode (TK/SD-1) & metadata profil                                | Tanggal lahir aktual anak (kecuali sengaja dikumpulkan di phase lain) |
+| Progres belajar server-side jika **ber-akun**                   | Memetakan progres anak ke email publik     |
+| Snapshot progres lokal jika **tamu** (perangkat)                | Sync cloud untuk tamu tanpa persetujuan    |
+| Waktu bermain (wellness)                                        | Lokasi geografis presisi                   |
+| PIN orang tua (di-hash)                                         | PIN plaintext                              |
+| Email orang tua & token sesi (jika ber-akun / OAuth)            | Kredensial anak                            |
 
 ### 11.3 Hak Pengguna
 
@@ -393,6 +456,8 @@ Mengacu pada **UU PDP No. 27 Tahun 2022** Indonesia + best practice global (COPP
 | Audio voice-over kualitas rendah (suara robotik / aksen tidak natural)     | High     | Pakai voice talent manusia (atau TTS premium seperti ElevenLabs) untuk voice-over fixed. Hindari Web Speech API native browser di production. |
 | Konten level kurang banyak → anak cepat bosan                              | High     | MVP fokus 3 level per jalur; rencana phase berikutnya tambah konten. Konten di-author via JSON, mudah ditambah. |
 | Orang tua lupa PIN                                                         | Medium   | Provide "reset PIN" via challenge (misal: jawab pertanyaan setup awal). Atau hapus + buat ulang profil. |
+| Salah paham tamu vs akun (kehilangan progres)                              | Medium   | Salinan jelas di gate onboarding + pengaturan; opsional CTA “hubungkan akun” saat migrasi tersedia. |
+| OAuth / penyimpanan data anak di bawah akun dewasa (expectation regulatoris) | Medium–High | Konsultasi teks legal; data minimization anak; tidak ada profil publik anak. |
 | Anak menemukan cara skip break reminder                                    | Medium   | Modal break tidak bisa di-dismiss instan (delay 5 detik), parent bisa override via PIN.                  |
 | SQLite single-file riskan corrupt jika crash                               | Medium   | Aktifkan WAL mode, schedule backup harian via Prisma migrate / cron sederhana di production.             |
 | PWA cache stale → anak melihat versi lama setelah update                   | Medium   | Workbox dengan strategi `network-first` untuk shell, `cache-first` untuk asset. Versioning di SW.        |
@@ -404,6 +469,8 @@ Mengacu pada **UU PDP No. 27 Tahun 2022** Indonesia + best practice global (COPP
 
 ## 14. Glossary
 
+- **Akun orang tua**: kredensial dewasa (email+kata sandi atau Google) yang memiliki hingga 4 profil anak dengan progres server-side.
+- **Mode tamu**: bermain tanpa akun; progres anak mengikuti penyimpanan lokal perangkat (§5.3).
 - **Profil anak**: identitas anak di aplikasi (nama panggilan + avatar + mode TK/SD-1).
 - **Mode**: TK atau SD-1, menentukan tingkat kesulitan dan jenis aktivitas yang tersedia.
 - **Jalur**: kategori belajar utama (Literasi atau Matematika).

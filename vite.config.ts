@@ -12,12 +12,39 @@ export default defineConfig({
     react(),
     tailwindcss(),
     VitePWA({
-      registerType: 'autoUpdate',
-      includeAssets: ['icons/pwa.svg', 'img/stickers/*.svg'],
+      /** Pembaruan SW lewat banner + `virtual:pwa-register/react`, bukan reload diam-diam. */
+      registerType: 'prompt',
+      includeAssets: ['icons/pwa.svg', 'img/stickers/*.svg', 'audio/**/*.mp3'],
       workbox: {
         /** Jangan fallback SPA ke `/api/*`; hindari SW meng-cache respons API. */
         navigateFallbackDenylist: [/^\/api/, /^\/admin/],
         runtimeCaching: [
+          {
+            urlPattern: ({ url, request }) =>
+              request.method === 'GET' &&
+              /^\/api\/profiles\/[^/]+\/dashboard$/.test(url.pathname),
+            handler: 'StaleWhileRevalidate',
+            options: {
+              cacheName: 'sw-api-profile-dashboard-v1',
+              expiration: {
+                maxEntries: 32,
+                maxAgeSeconds: 60 * 60 * 24 * 7,
+              },
+            },
+          },
+          {
+            urlPattern: ({ url, request }) =>
+              request.method === 'GET' &&
+              /^\/api\/profiles\/[^/]+\/stickers$/.test(url.pathname),
+            handler: 'StaleWhileRevalidate',
+            options: {
+              cacheName: 'sw-api-profile-stickers-v1',
+              expiration: {
+                maxEntries: 32,
+                maxAgeSeconds: 60 * 60 * 24 * 7,
+              },
+            },
+          },
           {
             urlPattern: ({ url }) => url.pathname.startsWith('/api'),
             handler: 'NetworkOnly',

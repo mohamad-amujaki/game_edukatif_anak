@@ -11,7 +11,7 @@ export async function denyUnlessSuperParent(
   c: Context,
 ): Promise<Response | undefined> {
   const token = c.req.header('X-Parent-Session');
-  if (!isParentSessionValid(token)) {
+  if (!(await isParentSessionValid(token))) {
     return jsonErr('UNAUTHORIZED', 'Butuh sesi orang tua', 401);
   }
   const settings = await prisma.parentSettings.findUnique({

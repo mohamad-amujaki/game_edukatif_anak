@@ -1,9 +1,12 @@
 import type { Prisma } from '@prisma/client';
 import { prisma } from '../db';
+import type { DbClient } from '../db-client';
+import { defaultDb } from '../db-client';
 import { syncAndAwardDailyQuestBonus } from './daily-quest';
 import { refreshMasteryForChild } from './mastery';
 import { computeXp, starsFromMistakes } from './stars';
 import { updateStreakAfterPlay } from './streak';
+import { syncAndAwardWeeklyQuestBonus } from './weekly-quest';
 
 export type SubmitResult = {
   stars: number;
@@ -28,32 +31,36 @@ export type SubmitResult = {
   streak: { current: number; isNewRecord: boolean };
 };
 
-async function totalXp(childId: string): Promise<number> {
-  const agg = await prisma.xpLog.aggregate({
+async function totalXp(childId: string, db?: DbClient): Promise<number> {
+  const d = defaultDb(db);
+  const agg = await d.xpLog.aggregate({
     where: { childId },
     _sum: { amount: true },
   });
   return agg._sum.amount ?? 0;
 }
 
-async function sumStars(childId: string): Promise<number> {
-  const progresses = await prisma.progress.findMany({ where: { childId } });
+async function sumStars(childId: string, db?: DbClient): Promise<number> {
+  const d = defaultDb(db);
+  const progresses = await d.progress.findMany({ where: { childId } });
   return progresses.reduce((acc, p) => acc + p.bestStars, 0);
 }
 
 async function maybeAwardSticker(
   childId: string,
+  db?: DbClient,
 ): Promise<SubmitResult['newSticker']> {
-  const total = await sumStars(childId);
+  const d = defaultDb(db);
+  const total = await sumStars(childId, d);
   if (total === 0 || total % 10 !== 0) return null;
 
-  const owned = await prisma.earnedSticker.findMany({
+  const owned = await d.earnedSticker.findMany({
     where: { childId },
     select: { stickerId: true },
   });
   const ownedSet = new Set(owned.map((o) => o.stickerId));
 
-  const pool = await prisma.stickerCatalog.findMany({
+  const pool = await d.stickerCatalog.findMany({
     where: ownedSet.size ? { id: { notIn: [...ownedSet] } } : undefined,
   });
   if (pool.length === 0) return null;
@@ -72,7 +79,7 @@ async function maybeAwardSticker(
     }
   }
   const pick = pool[idx] ?? pool[0];
-  await prisma.earnedSticker.create({
+  await d.earnedSticker.create({
     data: { childId, stickerId: pick.id },
   });
   return {
@@ -85,41 +92,43 @@ async function maybeAwardSticker(
 
 async function awardEligibleBadges(
   childId: string,
+  db?: DbClient,
 ): Promise<SubmitResult['newBadges']> {
+  const d = defaultDb(db);
   const out: SubmitResult['newBadges'] = [];
 
-  const child = await prisma.childProfile.findUnique({
+  const child = await d.childProfile.findUnique({
     where: { id: childId },
   });
   if (!child) return out;
 
   const earnedCodes = new Set(
     (
-      await prisma.earnedBadge.findMany({
+      await d.earnedBadge.findMany({
         where: { childId },
         include: { badge: true },
       })
     ).map((e) => e.badge.code),
   );
 
-  const badges = await prisma.badgeCatalog.findMany();
+  const badges = await d.badgeCatalog.findMany();
 
-  const activityCount = await prisma.progress.count({
+  const activityCount = await d.progress.count({
     where: { childId, firstCompletedAt: { not: null } },
   });
 
-  const threeStarCount = await prisma.progress.count({
+  const threeStarCount = await d.progress.count({
     where: { childId, bestStars: 3 },
   });
 
-  const streak = await prisma.dailyStreak.findUnique({ where: { childId } });
+  const streak = await d.dailyStreak.findUnique({ where: { childId } });
 
-  const stickerCount = await prisma.earnedSticker.count({ where: { childId } });
+  const stickerCount = await d.earnedSticker.count({ where: { childId } });
 
-  const lit1 = await prisma.levelDefinition.findFirst({
+  const lit1 = await d.levelDefinition.findFirst({
     where: { track: 'literasi', order: 1, ageMode: child.ageMode },
   });
-  const math1 = await prisma.levelDefinition.findFirst({
+  const math1 = await d.levelDefinition.findFirst({
     where: { track: 'math', order: 1, ageMode: child.ageMode },
   });
 
@@ -131,14 +140,14 @@ async function awardEligibleBadges(
     COLLECTOR_5: async () => stickerCount >= 5,
     MASTER_LIT_1: async () => {
       if (!lit1) return false;
-      const lm = await prisma.levelMastery.findUnique({
+      const lm = await d.levelMastery.findUnique({
         where: { childId_levelId: { childId, levelId: lit1.id } },
       });
       return lm?.isMastered ?? false;
     },
     MASTER_MATH_1: async () => {
       if (!math1) return false;
-      const lm = await prisma.levelMastery.findUnique({
+      const lm = await d.levelMastery.findUnique({
         where: { childId_levelId: { childId, levelId: math1.id } },
       });
       return lm?.isMastered ?? false;
@@ -150,7 +159,7 @@ async function awardEligibleBadges(
     const fn = evaluators[b.code];
     if (!fn) continue;
     if (await fn()) {
-      await prisma.earnedBadge.create({ data: { childId, badgeId: b.id } });
+      await d.earnedBadge.create({ data: { childId, badgeId: b.id } });
       out.push({
         id: b.id,
         code: b.code,
@@ -173,164 +182,180 @@ export async function submitActivity(args: {
 }): Promise<SubmitResult> {
   const { childId, activityId, mistakes, score: scoreValue } = args;
 
-  const child = await prisma.childProfile.findUnique({
-    where: { id: childId },
-  });
-  if (!child) throw new Error('NOT_FOUND');
+  return prisma.$transaction(async (tx) => {
+    const d = defaultDb(tx);
 
-  const activity = await prisma.activityDefinition.findUnique({
-    where: { id: activityId },
-    include: { level: true },
-  });
-  if (!activity) throw new Error('NOT_FOUND');
+    const child = await d.childProfile.findUnique({
+      where: { id: childId },
+    });
+    if (!child) throw new Error('NOT_FOUND');
 
-  const stars = starsFromMistakes(mistakes);
+    const activity = await d.activityDefinition.findUnique({
+      where: { id: activityId },
+      include: { level: true },
+    });
+    if (!activity) throw new Error('NOT_FOUND');
 
-  const existing = await prisma.progress.findUnique({
-    where: { childId_activityId: { childId, activityId } },
-  });
+    const stars = starsFromMistakes(mistakes);
 
-  const isFirstComplete = !existing?.firstCompletedAt;
-  const streakRes = await updateStreakAfterPlay(childId);
-  const xpAmount = computeXp({
-    stars,
-    isFirstComplete,
-    streakBonus: streakRes.streakBonus,
-  });
+    const existing = await d.progress.findUnique({
+      where: { childId_activityId: { childId, activityId } },
+    });
 
-  const starsImproved = !existing || stars > existing.bestStars;
+    const isFirstComplete = !existing?.firstCompletedAt;
+    const streakRes = await updateStreakAfterPlay(childId, d);
+    const xpAmount = computeXp({
+      stars,
+      isFirstComplete,
+      streakBonus: streakRes.streakBonus,
+    });
 
-  await prisma.progress.upsert({
-    where: { childId_activityId: { childId, activityId } },
-    create: {
-      childId,
-      activityId,
-      bestScore: scoreValue,
-      bestStars: stars,
-      totalAttempts: 1,
-      firstCompletedAt: new Date(),
-      lastPlayedAt: new Date(),
-    },
-    update: {
-      bestStars: Math.max(existing?.bestStars ?? 0, stars),
-      bestScore: Math.max(existing?.bestScore ?? 0, scoreValue),
-      totalAttempts: { increment: 1 },
-      lastPlayedAt: new Date(),
-      firstCompletedAt: existing?.firstCompletedAt ?? new Date(),
-    },
-  });
+    const starsImproved = !existing || stars > existing.bestStars;
 
-  const xpLogs: Prisma.XpLogCreateManyInput[] = [
-    {
-      childId,
-      amount: xpAmount,
-      source: isFirstComplete ? 'ACTIVITY_COMPLETE' : 'REPLAY',
-      refId: activityId,
-    },
-  ];
-
-  await prisma.xpLog.createMany({ data: xpLogs });
-
-  const unlockedBefore = new Set(
-    (
-      await prisma.levelMastery.findMany({
-        where: { childId, isUnlocked: true },
-        select: { levelId: true },
-      })
-    ).map((r) => r.levelId),
-  );
-
-  await refreshMasteryForChild(childId, child.ageMode);
-
-  const newlyUnlocked = await prisma.levelMastery.findMany({
-    where: { childId, isUnlocked: true },
-    select: { levelId: true },
-  });
-  let levelUpXp = 0;
-  for (const { levelId } of newlyUnlocked) {
-    if (unlockedBefore.has(levelId)) continue;
-    levelUpXp += 50;
-    await prisma.xpLog.create({
-      data: {
+    await d.progress.upsert({
+      where: { childId_activityId: { childId, activityId } },
+      create: {
         childId,
-        amount: 50,
-        source: 'LEVEL_UP',
-        refId: levelId,
+        activityId,
+        bestScore: scoreValue,
+        bestStars: stars,
+        totalAttempts: 1,
+        firstCompletedAt: new Date(),
+        lastPlayedAt: new Date(),
+      },
+      update: {
+        bestStars: Math.max(existing?.bestStars ?? 0, stars),
+        bestScore: Math.max(existing?.bestScore ?? 0, scoreValue),
+        totalAttempts: { increment: 1 },
+        lastPlayedAt: new Date(),
+        firstCompletedAt: existing?.firstCompletedAt ?? new Date(),
       },
     });
-  }
 
-  const questXp = await syncAndAwardDailyQuestBonus(childId, child.ageMode);
+    const xpLogs: Prisma.XpLogCreateManyInput[] = [
+      {
+        childId,
+        amount: xpAmount,
+        source: isFirstComplete ? 'ACTIVITY_COMPLETE' : 'REPLAY',
+        refId: activityId,
+      },
+    ];
 
-  const activitiesInLevel = await prisma.activityDefinition.findMany({
-    where: { levelId: activity.levelId },
-    orderBy: { order: 'asc' },
-  });
+    await d.xpLog.createMany({ data: xpLogs });
 
-  const progInLevel = await prisma.progress.findMany({
-    where: {
-      childId,
-      activityId: { in: activitiesInLevel.map((a) => a.id) },
-    },
-  });
-  const pmap = new Map(progInLevel.map((p) => [p.activityId, p.bestStars]));
-  const done = activitiesInLevel.filter(
-    (a) => (pmap.get(a.id) ?? 0) >= 1,
-  ).length;
-  const progressPct =
-    activitiesInLevel.length === 0
-      ? 0
-      : Math.round((done / activitiesInLevel.length) * 100);
+    const unlockedBefore = new Set(
+      (
+        await d.levelMastery.findMany({
+          where: { childId, isUnlocked: true },
+          select: { levelId: true },
+        })
+      ).map((r) => r.levelId),
+    );
 
-  const allGe3 = activitiesInLevel.every((a) => (pmap.get(a.id) ?? 0) >= 3);
+    await refreshMasteryForChild(childId, child.ageMode, d);
 
-  const allGe2 =
-    activitiesInLevel.length > 0 &&
-    activitiesInLevel.every((a) => (pmap.get(a.id) ?? 0) >= 2);
-
-  let unlockedLevel: SubmitResult['unlockedLevel'] = null;
-  const nextLevel = await prisma.levelDefinition.findFirst({
-    where: {
-      track: activity.level.track,
-      ageMode: activity.level.ageMode,
-      order: activity.level.order + 1,
-    },
-  });
-  if (nextLevel && allGe2) {
-    const lm = await prisma.levelMastery.findUnique({
-      where: { childId_levelId: { childId, levelId: nextLevel.id } },
+    const newlyUnlocked = await d.levelMastery.findMany({
+      where: { childId, isUnlocked: true },
+      select: { levelId: true },
     });
-    if (lm?.isUnlocked) {
-      unlockedLevel = {
-        id: nextLevel.id,
-        title: nextLevel.title,
-        track: nextLevel.track,
-      };
+    let levelUpXp = 0;
+    for (const { levelId } of newlyUnlocked) {
+      if (unlockedBefore.has(levelId)) continue;
+      levelUpXp += 50;
+      await d.xpLog.create({
+        data: {
+          childId,
+          amount: 50,
+          source: 'LEVEL_UP',
+          refId: levelId,
+        },
+      });
     }
-  }
 
-  const newSticker = await maybeAwardSticker(childId);
-  const newBadges = await awardEligibleBadges(childId);
+    const questXp = await syncAndAwardDailyQuestBonus(
+      childId,
+      child.ageMode,
+      d,
+    );
 
-  const streakRow = await prisma.dailyStreak.findUnique({ where: { childId } });
+    const weekly = await syncAndAwardWeeklyQuestBonus(
+      childId,
+      activityId,
+      stars,
+      d,
+    );
 
-  const bonusXp = levelUpXp + questXp;
-  const totalEarnedThisSubmit = xpAmount + bonusXp;
+    const activitiesInLevel = await d.activityDefinition.findMany({
+      where: { levelId: activity.levelId },
+      orderBy: { order: 'asc' },
+    });
 
-  return {
-    stars,
-    starsImproved,
-    xpEarned: totalEarnedThisSubmit,
-    totalXp: await totalXp(childId),
-    newSticker,
-    newBadges,
-    levelProgress: { progressPct, isMastered: allGe3 },
-    unlockedLevel,
-    streak: {
-      current: streakRow?.currentStreak ?? 0,
-      isNewRecord:
-        (streakRow?.currentStreak ?? 0) >= (streakRow?.longestStreak ?? 0) &&
-        (streakRow?.currentStreak ?? 0) > 0,
-    },
-  };
+    const progInLevel = await d.progress.findMany({
+      where: {
+        childId,
+        activityId: { in: activitiesInLevel.map((a) => a.id) },
+      },
+    });
+    const pmap = new Map(progInLevel.map((p) => [p.activityId, p.bestStars]));
+    const done = activitiesInLevel.filter(
+      (a) => (pmap.get(a.id) ?? 0) >= 1,
+    ).length;
+    const progressPct =
+      activitiesInLevel.length === 0
+        ? 0
+        : Math.round((done / activitiesInLevel.length) * 100);
+
+    const allGe3 = activitiesInLevel.every((a) => (pmap.get(a.id) ?? 0) >= 3);
+
+    const allGe2 =
+      activitiesInLevel.length > 0 &&
+      activitiesInLevel.every((a) => (pmap.get(a.id) ?? 0) >= 2);
+
+    let unlockedLevel: SubmitResult['unlockedLevel'] = null;
+    const nextLevel = await d.levelDefinition.findFirst({
+      where: {
+        track: activity.level.track,
+        ageMode: activity.level.ageMode,
+        order: activity.level.order + 1,
+      },
+    });
+    if (nextLevel && allGe2) {
+      const lm = await d.levelMastery.findUnique({
+        where: { childId_levelId: { childId, levelId: nextLevel.id } },
+      });
+      if (lm?.isUnlocked) {
+        unlockedLevel = {
+          id: nextLevel.id,
+          title: nextLevel.title,
+          track: nextLevel.track,
+        };
+      }
+    }
+
+    const regularSticker = await maybeAwardSticker(childId, d);
+    const newSticker = weekly.sticker ?? regularSticker;
+    const newBadges = await awardEligibleBadges(childId, d);
+
+    const streakRow = await d.dailyStreak.findUnique({ where: { childId } });
+
+    const bonusXp = levelUpXp + questXp + weekly.xp;
+    const totalEarnedThisSubmit = xpAmount + bonusXp;
+
+    return {
+      stars,
+      starsImproved,
+      xpEarned: totalEarnedThisSubmit,
+      totalXp: await totalXp(childId, d),
+      newSticker,
+      newBadges,
+      levelProgress: { progressPct, isMastered: allGe3 },
+      unlockedLevel,
+      streak: {
+        current: streakRow?.currentStreak ?? 0,
+        isNewRecord:
+          (streakRow?.currentStreak ?? 0) >= (streakRow?.longestStreak ?? 0) &&
+          (streakRow?.currentStreak ?? 0) > 0,
+      },
+    };
+  });
 }

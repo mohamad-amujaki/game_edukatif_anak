@@ -1,9 +1,17 @@
 import { Button } from '@/components/ui/Button';
+import { ActivityVoiceProvider } from '@/contexts/ActivityVoiceContext';
 import { useGameFeedback } from '@/hooks/useGameFeedback';
 import { useInstructionSpeech } from '@/hooks/useInstructionSpeech';
 import { emojiForKey } from '@/lib/emoji-map';
-import { pickSessionQuestions, shuffle } from '@/lib/math-session';
+import { effectiveSfxEnabled } from '@/lib/game-feedback-sync';
+import {
+  MATH_SESSION_QUESTION_COUNT,
+  pickSessionQuestions,
+  shuffle,
+} from '@/lib/math-session';
+import type { ActivityVoiceOverPayload } from '@server/schemas';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 
 type HurufPayload = {
   instruction: string;
@@ -85,9 +93,15 @@ type Props = {
   activityType: string;
   payload: unknown;
   title: string;
-  /** Teks instruksi untuk VO (Web Speech API, id-ID). */
+  /** JSON `voiceOverKeys` dari server (instruksi + aset MP3). */
+  voiceOver?: ActivityVoiceOverPayload | null;
+  /** Fallback instruksi jika `voiceOver` tidak dikirim. */
   instructionText?: string;
   instructionAudio?: string;
+  /** Jumlah soal sesi matematika dari server (adaptive), jika ada. */
+  mathQuestionCount?: number;
+  /** Panel admin: main tanpa menyimpan skor ke server. */
+  previewMode?: boolean;
   onComplete: (result: {
     mistakes: number;
     score: number;
@@ -100,10 +114,25 @@ export function ActivityPlayer({
   activityType,
   payload,
   title,
+  voiceOver,
   instructionText,
+  mathQuestionCount,
+  previewMode,
   onComplete,
 }: Props) {
-  useInstructionSpeech(instructionText);
+  const { i18n } = useTranslation();
+  const useEnVoice =
+    i18n.language.startsWith('en') && Boolean(voiceOver?.instruksiEn?.trim());
+  const utterLang: 'id-ID' | 'en-US' = useEnVoice ? 'en-US' : 'id-ID';
+  const speechLine = previewMode
+    ? undefined
+    : voiceOver?.instruksi
+      ? useEnVoice
+        ? (voiceOver.instruksiEn?.trim() ?? voiceOver.instruksi.trim())
+        : voiceOver.instruksi.trim()
+      : instructionText?.trim();
+
+  useInstructionSpeech(speechLine, utterLang);
 
   const started = useRef(Date.now());
   const wrapped = useMemo(() => {
@@ -117,75 +146,107 @@ export function ActivityPlayer({
         1,
         Math.round((Date.now() - started.current) / 1000),
       );
+      const doneUrl = voiceOver?.completion?.trim();
+      if (doneUrl && effectiveSfxEnabled()) {
+        const audio = new Audio(doneUrl);
+        audio.volume = 0.9;
+        void audio.play().catch(() => {});
+      }
       onComplete({ mistakes, score, maxScore, durationSec });
     },
-    [onComplete],
+    [onComplete, voiceOver?.completion],
   );
 
-  switch (wrapped.type) {
-    case 'HURUF_GAMBAR_MATCHING':
-      return (
-        <HurufGambar
-          title={title}
-          data={wrapped.data}
-          onDone={(m, s, mx) => finish(m, s, mx)}
-        />
-      );
-    case 'SUSUN_SUKU_KATA':
-      return (
-        <SusunSukuKata
-          title={title}
-          data={wrapped.data}
-          onDone={(m, s, mx) => finish(m, s, mx)}
-        />
-      );
-    case 'BACA_KALIMAT_PENDEK':
-      return (
-        <BacaKalimat
-          title={title}
-          data={wrapped.data}
-          onDone={(m, s, mx) => finish(m, s, mx)}
-        />
-      );
-    case 'HITUNG_BENDA':
-      return (
-        <HitungBenda
-          title={title}
-          data={wrapped.data}
-          onDone={(m, s, mx) => finish(m, s, mx)}
-        />
-      );
-    case 'BANDINGKAN_LEBIH_KURANG':
-      return (
-        <Bandingkan
-          title={title}
-          data={wrapped.data}
-          onDone={(m, s, mx) => finish(m, s, mx)}
-        />
-      );
-    case 'PENJUMLAHAN_VISUAL':
-      return (
-        <Penjumlahan
-          title={title}
-          data={wrapped.data}
-          onDone={(m, s, mx) => finish(m, s, mx)}
-        />
-      );
-    case 'PENGURANGAN_VISUAL':
-      return (
-        <Pengurangan
-          title={title}
-          data={wrapped.data}
-          onDone={(m, s, mx) => finish(m, s, mx)}
-        />
-      );
-    default:
-      return (
-        <p className="p-6 text-center text-lg">
-          Jenis aktivitas belum didukung: {activityType}
-        </p>
-      );
-  }
+  const inner = (() => {
+    switch (wrapped.type) {
+      case 'HURUF_GAMBAR_MATCHING':
+        return (
+          <HurufGambar
+            title={title}
+            data={wrapped.data}
+            onDone={(m, s, mx) => finish(m, s, mx)}
+          />
+        );
+      case 'SUSUN_SUKU_KATA':
+        return (
+          <SusunSukuKata
+            title={title}
+            data={wrapped.data}
+            onDone={(m, s, mx) => finish(m, s, mx)}
+          />
+        );
+      case 'BACA_KALIMAT_PENDEK':
+        return (
+          <BacaKalimat
+            title={title}
+            data={wrapped.data}
+            onDone={(m, s, mx) => finish(m, s, mx)}
+          />
+        );
+      case 'HITUNG_BENDA':
+        return (
+          <HitungBenda
+            title={title}
+            data={wrapped.data}
+            questionCount={mathQuestionCount}
+            onDone={(m, s, mx) => finish(m, s, mx)}
+          />
+        );
+      case 'BANDINGKAN_LEBIH_KURANG':
+        return (
+          <Bandingkan
+            title={title}
+            data={wrapped.data}
+            questionCount={mathQuestionCount}
+            onDone={(m, s, mx) => finish(m, s, mx)}
+          />
+        );
+      case 'PENJUMLAHAN_VISUAL':
+        return (
+          <Penjumlahan
+            title={title}
+            data={wrapped.data}
+            questionCount={mathQuestionCount}
+            onDone={(m, s, mx) => finish(m, s, mx)}
+          />
+        );
+      case 'PENGURANGAN_VISUAL':
+        return (
+          <Pengurangan
+            title={title}
+            data={wrapped.data}
+            questionCount={mathQuestionCount}
+            onDone={(m, s, mx) => finish(m, s, mx)}
+          />
+        );
+      default:
+        return (
+          <p className="p-6 text-center text-lg">
+            Jenis aktivitas belum didukung: {activityType}
+          </p>
+        );
+    }
+  })();
+
+  const body = previewMode ? (
+    <div className="mx-auto w-full max-w-3xl space-y-4 px-2">
+      <p
+        aria-live="polite"
+        className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-center text-sm font-medium text-amber-950"
+      >
+        Mode pratinjau — skor tidak dikirim atau disimpan.
+      </p>
+      {inner}
+    </div>
+  ) : (
+    inner
+  );
+
+  return (
+    <ActivityVoiceProvider bundle={voiceOver ?? null}>
+      {body}
+    </ActivityVoiceProvider>
+  );
 }
 
 function HurufGambar({
@@ -465,16 +526,22 @@ function BacaKalimat({
 function HitungBenda({
   title,
   data,
+  questionCount,
   onDone,
 }: {
   title: string;
   data: HitungPayload;
+  questionCount?: number;
   onDone: (mistakes: number, score: number, maxScore: number) => void;
 }) {
   const { celebrateCorrect, warnWrong, motionSafeRing } = useGameFeedback();
   const sessionQuestions = useMemo(
-    () => pickSessionQuestions(data.questions),
-    [data.questions],
+    () =>
+      pickSessionQuestions(
+        data.questions,
+        questionCount ?? MATH_SESSION_QUESTION_COUNT,
+      ),
+    [data.questions, questionCount],
   );
   const [idx, setIdx] = useState(0);
   const [mistakes, setMistakes] = useState(0);
@@ -536,16 +603,22 @@ function HitungBenda({
 function Bandingkan({
   title,
   data,
+  questionCount,
   onDone,
 }: {
   title: string;
   data: BandingPayload;
+  questionCount?: number;
   onDone: (mistakes: number, score: number, maxScore: number) => void;
 }) {
   const { celebrateCorrect, warnWrong, motionSafeRing } = useGameFeedback();
   const sessionQuestions = useMemo(
-    () => pickSessionQuestions(data.questions),
-    [data.questions],
+    () =>
+      pickSessionQuestions(
+        data.questions,
+        questionCount ?? MATH_SESSION_QUESTION_COUNT,
+      ),
+    [data.questions, questionCount],
   );
   const [idx, setIdx] = useState(0);
   const [mistakes, setMistakes] = useState(0);
@@ -617,16 +690,22 @@ function Bandingkan({
 function Penjumlahan({
   title,
   data,
+  questionCount,
   onDone,
 }: {
   title: string;
   data: TambahPayload;
+  questionCount?: number;
   onDone: (mistakes: number, score: number, maxScore: number) => void;
 }) {
   const { celebrateCorrect, warnWrong, motionSafeRing } = useGameFeedback();
   const sessionQuestions = useMemo(
-    () => pickSessionQuestions(data.questions),
-    [data.questions],
+    () =>
+      pickSessionQuestions(
+        data.questions,
+        questionCount ?? MATH_SESSION_QUESTION_COUNT,
+      ),
+    [data.questions, questionCount],
   );
   const [idx, setIdx] = useState(0);
   const [mistakes, setMistakes] = useState(0);
@@ -698,16 +777,22 @@ function Penjumlahan({
 function Pengurangan({
   title,
   data,
+  questionCount,
   onDone,
 }: {
   title: string;
   data: KurangPayload;
+  questionCount?: number;
   onDone: (mistakes: number, score: number, maxScore: number) => void;
 }) {
   const { celebrateCorrect, warnWrong, motionSafeRing } = useGameFeedback();
   const sessionQuestions = useMemo(
-    () => pickSessionQuestions(data.questions),
-    [data.questions],
+    () =>
+      pickSessionQuestions(
+        data.questions,
+        questionCount ?? MATH_SESSION_QUESTION_COUNT,
+      ),
+    [data.questions, questionCount],
   );
   const [idx, setIdx] = useState(0);
   const [mistakes, setMistakes] = useState(0);

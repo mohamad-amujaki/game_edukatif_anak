@@ -1,6 +1,6 @@
-import { APIError, betterAuth } from 'better-auth';
+import { betterAuth } from 'better-auth';
 import { prismaAdapter } from 'better-auth/adapters/prisma';
-import { admin, createAccessControl } from 'better-auth/plugins';
+import { admin, createAccessControl, twoFactor } from 'better-auth/plugins';
 import { allowedBrowserOrigins } from './allowed-origins';
 import { prisma } from './db';
 
@@ -59,7 +59,14 @@ const roleAnalyst = ac.newRole({
   session: [],
 });
 
+const googleClientId = process.env.GOOGLE_CLIENT_ID?.trim();
+const googleClientSecret = process.env.GOOGLE_CLIENT_SECRET?.trim();
+
+const appName =
+  process.env.BETTER_AUTH_APP_NAME?.trim() || 'Game Edukatif — Admin';
+
 export const auth = betterAuth({
+  appName,
   database: prismaAdapter(prisma, { provider: 'postgresql' }),
   secret: authSecret(),
   /**
@@ -71,50 +78,23 @@ export const auth = betterAuth({
   baseURL: process.env.BETTER_AUTH_URL?.trim() || 'http://localhost:5173',
   emailAndPassword: {
     enabled: true,
-    /** Setelah daftar admin pertama, cookie sesi langsung aktif (tanpa login kedua). */
     autoSignIn: true,
-    /**
-     * Sign-up email aktif; hook database membatasi ke **satu** akun pertama (`super_admin`).
-     * Admin berikutnya dibuat dari panel admin oleh super_admin.
-     */
+    /** Orang tua (app utama); admin panel memakai CLI `pnpm admin:create` atau undangan dari super_admin. */
     disableSignUp: false,
   },
-  databaseHooks: {
-    user: {
-      create: {
-        /**
-         * Hanya untuk **`POST /sign-up/email`** (admin pertama).
-         * Pembuatan user lewat **`/admin/create-user`** (panel super_admin) tidak boleh
-         * memakai aturan "satu akun" ini — tanpa pengecualian, hook akan selalu menolak
-         * setelah user pertama ada.
-         */
-        before: async (user, ctx) => {
-          const path = String(ctx?.path ?? '');
-          const isPublicEmailSignUp =
-            path.includes('sign-up') && path.includes('email');
-          if (!isPublicEmailSignUp) {
-            return undefined;
-          }
-
-          const existing = await prisma.user.count();
-          if (existing > 0) {
-            throw APIError.from('FORBIDDEN', {
-              message:
-                'Pendaftaran admin tertutup. Gunakan masuk dengan akun yang ada / minta super_admin menambahkan Anda.',
-              code: 'ADMIN_SIGNUP_CLOSED',
-            });
-          }
-          return {
-            data: {
-              ...user,
-              role: 'super_admin',
-            },
-          };
+  ...(googleClientId &&
+    googleClientSecret && {
+      socialProviders: {
+        google: {
+          clientId: googleClientId,
+          clientSecret: googleClientSecret,
         },
       },
-    },
-  },
+    }),
   plugins: [
+    twoFactor({
+      issuer: appName,
+    }),
     admin({
       ac,
       roles: {
@@ -122,7 +102,8 @@ export const auth = betterAuth({
         content_editor: roleContentEditor,
         analyst: roleAnalyst,
       },
-      defaultRole: 'analyst',
+      /** Pendaftar publik (email/Google) menjadi orang tua aplikasi bermain — bukan staf panel. */
+      defaultRole: 'parent',
       adminRoles: ['super_admin', 'content_editor', 'analyst'],
       bannedUserMessage: 'Anda telah diblokir dari panel admin.',
     }),

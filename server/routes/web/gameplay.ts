@@ -1,7 +1,13 @@
 import type { Track } from '@prisma/client';
 import { Hono } from 'hono';
+import { gateChildProfileForKidAppOrJson } from '../../child-access';
 import { prisma } from '../../db';
-import { submitActivitySchema } from '../../schemas';
+import {
+  type ActivityVoiceOverPayload,
+  activityVoiceOverSchema,
+  submitActivitySchema,
+} from '../../schemas';
+import { computeMathSessionQuestionCount } from '../../services/adaptive-math-session';
 import { buildDashboard } from '../../services/dashboard';
 import { submitActivity } from '../../services/submit-activity';
 import { jsonErr } from './shared';
@@ -42,6 +48,8 @@ async function loadSingletonDevicePreferences() {
 
 gameplayApp.get('/api/profiles/:id/dashboard', async (c) => {
   const id = c.req.param('id');
+  const gated = await gateChildProfileForKidAppOrJson(c, id);
+  if (gated instanceof Response) return gated;
   const dash = await buildDashboard(id);
   if (!dash) return jsonErr('NOT_FOUND', 'Profil tidak ada', 404);
   return c.json({ data: dash });
@@ -61,20 +69,16 @@ gameplayApp.get('/api/device/preferences', async (c) => {
 /** Batas bermain & reminder (validasi profil anak + singleton). */
 gameplayApp.get('/api/profiles/:id/wellness', async (c) => {
   const childId = c.req.param('id');
-  const child = await prisma.childProfile.findUnique({
-    where: { id: childId },
-  });
-  if (!child) return jsonErr('NOT_FOUND', 'Profil tidak ada', 404);
+  const gated = await gateChildProfileForKidAppOrJson(c, childId);
+  if (gated instanceof Response) return gated;
   const data = await loadSingletonDevicePreferences();
   return c.json({ data });
 });
 
 gameplayApp.get('/api/profiles/:id/stickers', async (c) => {
   const childId = c.req.param('id');
-  const child = await prisma.childProfile.findUnique({
-    where: { id: childId },
-  });
-  if (!child) return jsonErr('NOT_FOUND', 'Profil tidak ada', 404);
+  const gated = await gateChildProfileForKidAppOrJson(c, childId);
+  if (gated instanceof Response) return gated;
 
   const rows = await prisma.earnedSticker.findMany({
     where: { childId },
@@ -98,38 +102,50 @@ gameplayApp.get('/api/profiles/:id/levels', async (c) => {
   const childId = c.req.param('id');
   const trackQ = c.req.query('track') as Track | undefined;
 
-  const child = await prisma.childProfile.findUnique({
-    where: { id: childId },
-  });
-  if (!child) return jsonErr('NOT_FOUND', 'Profil tidak ada', 404);
+  const gated = await gateChildProfileForKidAppOrJson(c, childId);
+  if (gated instanceof Response) return gated;
+  const child = gated;
 
-  const levels = await prisma.levelDefinition.findMany({
-    where: {
-      ageMode: child.ageMode,
-      ...(trackQ ? { track: trackQ } : {}),
-    },
-    orderBy: [{ track: 'asc' }, { order: 'asc' }],
-  });
+  const [levels, progressRows] = await Promise.all([
+    prisma.levelDefinition.findMany({
+      where: {
+        ageMode: child.ageMode,
+        ...(trackQ ? { track: trackQ } : {}),
+      },
+      orderBy: [{ track: 'asc' }, { order: 'asc' }],
+      include: {
+        activities: { select: { id: true } },
+        levelMastery: { where: { childId } },
+      },
+    }),
+    prisma.progress.findMany({
+      where: {
+        childId,
+        activity: { level: { ageMode: child.ageMode } },
+      },
+      select: { activityId: true, bestStars: true },
+    }),
+  ]);
 
-  const out = [];
-  for (const level of levels) {
-    const mastery = await prisma.levelMastery.findUnique({
-      where: { childId_levelId: { childId, levelId: level.id } },
-    });
-    const acts = await prisma.activityDefinition.findMany({
-      where: { levelId: level.id },
-    });
-    const prog = await prisma.progress.findMany({
-      where: { childId, activityId: { in: acts.map((a) => a.id) } },
-    });
-    const pmap = new Map(prog.map((p) => [p.activityId, p.bestStars]));
-    const starsEarned = prog.reduce((s, p) => s + p.bestStars, 0);
+  const progressByActivity = new Map(
+    progressRows.map((p) => [p.activityId, p.bestStars]),
+  );
+
+  const out = levels.map((level) => {
+    const acts = level.activities;
+    const mastery = level.levelMastery[0];
+    const starsEarned = acts.reduce(
+      (s, a) => s + (progressByActivity.get(a.id) ?? 0),
+      0,
+    );
     const starsMax = acts.length * 3;
-    const done = acts.filter((a) => (pmap.get(a.id) ?? 0) >= 1).length;
+    const done = acts.filter(
+      (a) => (progressByActivity.get(a.id) ?? 0) >= 1,
+    ).length;
     const progressPct =
       acts.length === 0 ? 0 : Math.round((done / acts.length) * 100);
 
-    out.push({
+    return {
       id: level.id,
       track: level.track,
       order: level.order,
@@ -142,8 +158,8 @@ gameplayApp.get('/api/profiles/:id/levels', async (c) => {
       activitiesCount: acts.length,
       starsEarned,
       starsMax,
-    });
-  }
+    };
+  });
 
   return c.json({ data: out });
 });
@@ -152,10 +168,9 @@ gameplayApp.get('/api/profiles/:childId/levels/:levelId', async (c) => {
   const childId = c.req.param('childId');
   const levelId = c.req.param('levelId');
 
-  const child = await prisma.childProfile.findUnique({
-    where: { id: childId },
-  });
-  if (!child) return jsonErr('NOT_FOUND', 'Profil tidak ada', 404);
+  const gated = await gateChildProfileForKidAppOrJson(c, childId);
+  if (gated instanceof Response) return gated;
+  const child = gated;
 
   const level = await prisma.levelDefinition.findUnique({
     where: { id: levelId },
@@ -213,13 +228,40 @@ gameplayApp.get('/api/profiles/:childId/levels/:levelId', async (c) => {
 
 gameplayApp.get('/api/activities/:id', async (c) => {
   const id = c.req.param('id');
+  const childId = c.req.query('childId');
   const act = await prisma.activityDefinition.findUnique({
     where: { id },
     include: { level: true },
   });
   if (!act) return jsonErr('NOT_FOUND', 'Aktivitas tidak ada', 404);
 
-  const voice = JSON.parse(act.voiceOverKeys) as { instruksi: string };
+  let parsedVoiceJson: unknown;
+  try {
+    parsedVoiceJson = JSON.parse(act.voiceOverKeys);
+  } catch {
+    parsedVoiceJson = { instruksi: act.title };
+  }
+  const voiceParsed = activityVoiceOverSchema.safeParse(parsedVoiceJson);
+  const voice: ActivityVoiceOverPayload = voiceParsed.success
+    ? voiceParsed.data
+    : typeof parsedVoiceJson === 'object' &&
+        parsedVoiceJson !== null &&
+        'instruksi' in parsedVoiceJson &&
+        typeof (parsedVoiceJson as { instruksi?: unknown }).instruksi ===
+          'string'
+      ? { instruksi: (parsedVoiceJson as { instruksi: string }).instruksi }
+      : { instruksi: act.title };
+
+  let sessionQuestionCount: number | undefined;
+  if (childId && act.level.track === 'math') {
+    const gated = await gateChildProfileForKidAppOrJson(c, childId);
+    if (gated instanceof Response) return gated;
+    const childMini = gated;
+    if (childMini.ageMode === act.level.ageMode) {
+      sessionQuestionCount = await computeMathSessionQuestionCount(childId);
+    }
+  }
+
   return c.json({
     data: {
       id: act.id,
@@ -233,6 +275,7 @@ gameplayApp.get('/api/activities/:id', async (c) => {
         title: act.level.title,
         track: act.level.track,
       },
+      ...(sessionQuestionCount != null ? { sessionQuestionCount } : {}),
     },
   });
 });
@@ -247,10 +290,8 @@ gameplayApp.post(
     if (!parsed.success)
       return jsonErr('VALIDATION_ERROR', parsed.error.message, 400);
 
-    const child = await prisma.childProfile.findUnique({
-      where: { id: childId },
-    });
-    if (!child) return jsonErr('NOT_FOUND', 'Profil tidak ada', 404);
+    const gated = await gateChildProfileForKidAppOrJson(c, childId);
+    if (gated instanceof Response) return gated;
 
     try {
       const result = await submitActivity({

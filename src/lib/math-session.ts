@@ -1,4 +1,7 @@
-/** Jumlah soal per sesi dari bank besar (PRD §3.5: 5–8). */
+/**
+ * Default jumlah soal per sesi (PRD §3.5). Adaptive §4.1 mengatur 5–10 dari server
+ * (`sessionQuestionCount` pada payload aktivitas matematika).
+ */
 export const MATH_SESSION_QUESTION_COUNT = 6;
 
 export function shuffle<T>(arr: T[]): T[] {

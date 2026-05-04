@@ -1,5 +1,14 @@
 import { adminApi } from '@/api-admin';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from 'recharts';
 
 export function AdminAnalyticsPage() {
   const [data, setData] = useState<Awaited<
@@ -15,6 +24,36 @@ export function AdminAnalyticsPage() {
         setErr(e instanceof Error ? e.message : 'Gagal memuat analytics'),
       );
   }, []);
+
+  const retentionChart = useMemo(() => {
+    if (!data) return [];
+    return [
+      {
+        key: `D1 (n=${data.retentionCohortD1})`,
+        pct: typeof data.retentionD1Pct === 'number' ? data.retentionD1Pct : 0,
+      },
+      {
+        key: `D7 (n=${data.retentionCohortD7})`,
+        pct: typeof data.retentionD7Pct === 'number' ? data.retentionD7Pct : 0,
+      },
+    ];
+  }, [data]);
+
+  const levelBars = useMemo(() => {
+    if (!data) return [];
+    return data.levelCompletion.slice(0, 16).map((r) => ({
+      label: `${r.ageMode} ${r.track === 'literasi' ? 'L' : 'M'}${String(r.order)}`,
+      pct: r.masteredPct,
+    }));
+  }, [data]);
+
+  const starsBars = useMemo(() => {
+    if (!data) return [];
+    return data.avgStarsByActivity.slice(0, 16).map((r) => ({
+      label: r.title.length > 20 ? `${r.title.slice(0, 18)}…` : r.title,
+      avg: r.avgStars,
+    }));
+  }, [data]);
 
   return (
     <div className="space-y-8">
@@ -52,6 +91,103 @@ export function AdminAnalyticsPage() {
               value={data.mau30d}
               max={Math.max(data.dauToday, data.mau30d, 1)}
             />
+          </div>
+        </section>
+      ) : null}
+
+      {data ? (
+        <section className="grid gap-6 lg:grid-cols-2">
+          <div className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm">
+            <h2 className="text-lg font-semibold text-neutral-900">
+              Retensi kohort (%)
+            </h2>
+            <p className="mt-1 text-xs text-neutral-500">
+              D1/D7 dari metrik backend (null → ditampilkan 0 di grafik).
+            </p>
+            <div className="mt-4 h-64 w-full min-w-0">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={retentionChart}>
+                  <CartesianGrid strokeDasharray="3 3" opacity={0.4} />
+                  <XAxis
+                    dataKey="key"
+                    tick={{ fontSize: 11 }}
+                    interval={0}
+                    angle={-12}
+                    textAnchor="end"
+                    height={56}
+                  />
+                  <YAxis domain={[0, 100]} tick={{ fontSize: 11 }} unit="%" />
+                  <Tooltip />
+                  <Bar
+                    dataKey="pct"
+                    fill="#6366f1"
+                    name="%"
+                    radius={[6, 6, 0, 0]}
+                  />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+          <div className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm">
+            <h2 className="text-lg font-semibold text-neutral-900">
+              Penyelesaian level (% anak eligible)
+            </h2>
+            <p className="mt-1 text-xs text-neutral-500">
+              Sampai 16 level pertama (urutan kurikulum).
+            </p>
+            <div className="mt-4 h-64 w-full min-w-0">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart
+                  layout="vertical"
+                  data={levelBars}
+                  margin={{ left: 12 }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" opacity={0.4} />
+                  <XAxis
+                    type="number"
+                    domain={[0, 100]}
+                    tick={{ fontSize: 11 }}
+                  />
+                  <YAxis
+                    type="category"
+                    dataKey="label"
+                    width={52}
+                    tick={{ fontSize: 10 }}
+                  />
+                  <Tooltip />
+                  <Bar
+                    dataKey="pct"
+                    fill="#0d9488"
+                    name="%"
+                    radius={[0, 4, 4, 0]}
+                  />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+          <div className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm lg:col-span-2">
+            <h2 className="text-lg font-semibold text-neutral-900">
+              Rata-rata bintang per aktivitas (peringkat percobaan)
+            </h2>
+            <p className="mt-1 text-xs text-neutral-500">
+              Top 16 berdasarkan jumlah percobaan di metrik overview.
+            </p>
+            <div className="mt-4 h-72 w-full min-w-0">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={starsBars}>
+                  <CartesianGrid strokeDasharray="3 3" opacity={0.4} />
+                  <XAxis dataKey="label" tick={{ fontSize: 10 }} />
+                  <YAxis domain={[0, 3]} tick={{ fontSize: 11 }} />
+                  <Tooltip />
+                  <Bar
+                    dataKey="avg"
+                    fill="#d97706"
+                    name="★"
+                    radius={[6, 6, 0, 0]}
+                  />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
           </div>
         </section>
       ) : null}
