@@ -1,3 +1,7 @@
+# Satu paket di root; tanpa `packages` pnpm gagal (mis. CI: "packages field missing or empty").
+packages:
+  - .
+
 onlyBuiltDependencies:
   - '@biomejs/biome'
   - '@prisma/client'
