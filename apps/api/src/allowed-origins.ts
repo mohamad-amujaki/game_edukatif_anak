@@ -10,6 +10,9 @@ export function allowedBrowserOrigins(): string[] {
   const defaults = [
     'http://localhost:5173',
     'http://127.0.0.1:5173',
+    // Port cadangan Vite jika 5173 sudah dipakai (`VITE_DEV_PORT=5174`, dll.).
+    'http://localhost:5174',
+    'http://127.0.0.1:5174',
     'https://game-edukatif-anak.netlify.app',
   ];
   return [...new Set([...defaults, ...fromEnv])];

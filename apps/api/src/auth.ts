@@ -65,17 +65,36 @@ const googleClientSecret = process.env.GOOGLE_CLIENT_SECRET?.trim();
 const appName =
   process.env.BETTER_AUTH_APP_NAME?.trim() || 'Game Edukatif — Admin';
 
+/**
+ * Produksi: satu URL publik (`BETTER_AUTH_URL`).
+ * Development: base URL **dinamis** dari host permintaan (via `x-forwarded-host` dari proxy Vite)
+ * supaya OAuth Google memakai `redirect_uri` ke port yang sama dengan tab browser (5173 vs 5174).
+ * Daftar di Google Console: tambahkan tiap port yang dipakai, mis.
+ * `http://localhost:5173/api/auth/callback/google` dan `http://localhost:5174/api/auth/callback/google`.
+ */
+const devDynamicBaseURL = {
+  allowedHosts: [
+    'localhost:5173',
+    '127.0.0.1:5173',
+    'localhost:5174',
+    '127.0.0.1:5174',
+    'localhost:4173',
+    '127.0.0.1:4173',
+  ],
+  fallback: process.env.BETTER_AUTH_URL?.trim() || 'http://localhost:5173',
+  protocol: 'http' as const,
+};
+
+const authBaseURL =
+  process.env.NODE_ENV === 'production'
+    ? process.env.BETTER_AUTH_URL?.trim() || 'http://localhost:5173'
+    : devDynamicBaseURL;
+
 export const auth = betterAuth({
   appName,
   database: prismaAdapter(prisma, { provider: 'postgresql' }),
   secret: authSecret(),
-  /**
-   * Di Fly + Netlify proxy: **`BETTER_AUTH_URL` harus URL yang dipakai browser**, mis.
-   * `https://game-edukatif-anak.netlify.app` (tanpa slash akhir). Konfigurasi `baseURL`
-   * dinamis (allowedHosts) pernah memunculkan 500 di production; string statis + header
-   * `x-forwarded-host` yang di-inject di `auth-proxy-headers.ts` lebih stabil.
-   */
-  baseURL: process.env.BETTER_AUTH_URL?.trim() || 'http://localhost:5173',
+  baseURL: authBaseURL,
   emailAndPassword: {
     enabled: true,
     autoSignIn: true,

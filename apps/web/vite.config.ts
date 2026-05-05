@@ -98,6 +98,16 @@ export default defineConfig({
       '/api': {
         target: devApiOrigin,
         changeOrigin: true,
+        /** Agar Better Auth memakai host asli browser (port Vite), bukan `localhost:3000`. */
+        configure(proxy) {
+          proxy.on('proxyReq', (proxyReq, req) => {
+            const host = req.headers.host;
+            if (host) {
+              proxyReq.setHeader('X-Forwarded-Host', host);
+              proxyReq.setHeader('X-Forwarded-Proto', 'http');
+            }
+          });
+        },
       },
     },
   },
