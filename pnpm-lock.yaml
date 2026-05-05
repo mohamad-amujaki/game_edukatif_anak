@@ -148,6 +148,47 @@ importers:
         specifier: ^7.4.0
         version: 7.4.0
 
+  apps/api: {}
+
+  apps/web:
+    dependencies:
+      '@mainceria/api-client':
+        specifier: workspace:*
+        version: link:../../packages/api-client
+      '@mainceria/types':
+        specifier: workspace:*
+        version: link:../../packages/types
+      '@mainceria/ui':
+        specifier: workspace:*
+        version: link:../../packages/ui
+      '@mainceria/utils':
+        specifier: workspace:*
+        version: link:../../packages/utils
+
+  packages/api-client:
+    dependencies:
+      '@mainceria/types':
+        specifier: workspace:*
+        version: link:../types
+      hono:
+        specifier: ^4.7.10
+        version: 4.12.16
+
+  packages/config: {}
+
+  packages/types: {}
+
+  packages/ui:
+    dependencies:
+      react:
+        specifier: ^19.0.0
+        version: 19.2.5
+      react-dom:
+        specifier: ^19.0.0
+        version: 19.2.5(react@19.2.5)
+
+  packages/utils: {}
+
 packages:
 
   '@apideck/better-ajv-errors@0.3.7':

@@ -199,7 +199,7 @@ Soft, tidak terlalu dalam:
 
 - Lottie JSON untuk pose dengan animasi (talking, celebrating)
 - SVG static untuk pose idle / placeholder
-- Disimpan di `public/img/mascot/` dan `public/lottie/mascot/`
+- Disimpan di **`apps/web/public/img/mascot/`** dan **`apps/web/public/lottie/mascot/`** (URL `/img/mascot/…`, `/lottie/mascot/…`)
 
 ---
 
@@ -217,7 +217,7 @@ Pakai **Phosphor Icons** atau **Lucide** (keduanya open-source, rounded variants
 
 ### 6.3 Custom Icon
 
-Untuk konteks game (huruf, angka, bintang, dll.), buat custom illustrated icons di `public/img/icons/`.
+Untuk konteks game (huruf, angka, bintang, dll.), buat custom illustrated icons di **`apps/web/public/img/icons/`** (URL `/img/icons/…`).
 
 ---
 
@@ -445,7 +445,7 @@ Komponen yang harus dibangun di Phase 0–2:
 ### 13.2 File Convention
 
 - Original di repo terpisah (`assets-source/`) atau Google Drive (jangan masuk ke `git`).
-- Optimized output di `public/` ikuti struktur yang sudah didefinisikan di [architecture.md](architecture.md).
+- Optimized output di **`apps/web/public/`** ikuti struktur yang sudah didefinisikan di [architecture.md](architecture.md).
 - Naming: lowercase-with-dash, descriptive: `apel.webp`, BUKAN `IMG_001.png`.
 
 ---

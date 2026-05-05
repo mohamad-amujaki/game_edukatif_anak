@@ -1,0 +1,20 @@
+{
+  "extends": "../../packages/config/tsconfig.base.json",
+  "compilerOptions": {
+    "baseUrl": "../..",
+    "paths": {
+      "@/*": ["apps/web/src/*"],
+      "@mainceria/api-client": ["packages/api-client/src/index.ts"],
+      "@mainceria/types": ["packages/types/src/index.ts"],
+      "@mainceria/ui": ["packages/ui/src/index.ts"],
+      "@mainceria/utils": ["packages/utils/src/index.ts"]
+    }
+  },
+  "include": [
+    "./src",
+    "../../apps/api/src",
+    "../../packages",
+    "../../prisma",
+    "../../prisma.config.ts"
+  ]
+}

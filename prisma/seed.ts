@@ -1,4 +1,4 @@
-import { prisma } from '../server/db';
+import { prisma } from '../apps/api/src/db';
 import { extendedLevelsSeed } from './extended-levels-seed';
 import {
   sd1Literasi1SusunQuestions,

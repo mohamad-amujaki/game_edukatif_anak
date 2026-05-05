@@ -1,0 +1,19 @@
+{
+  "name": "@mainceria/web",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "dependencies": {
+    "@mainceria/api-client": "workspace:*",
+    "@mainceria/types": "workspace:*",
+    "@mainceria/ui": "workspace:*",
+    "@mainceria/utils": "workspace:*"
+  },
+  "scripts": {
+    "dev": "pnpm dev:vite",
+    "dev:vite": "pnpm --dir ../.. exec vite --config apps/web/vite.config.ts",
+    "build": "pnpm --dir ../.. exec vite build --config apps/web/vite.config.ts",
+    "preview": "pnpm --dir ../.. exec vite preview --config apps/web/vite.config.ts",
+    "check": "pnpm --dir ../.. exec tsc --noEmit -p apps/web/tsconfig.json"
+  }
+}

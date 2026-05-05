@@ -1,4 +1,4 @@
-import { prisma } from '../../server/db';
+import { prisma } from '../../apps/api/src/db';
 
 /** Kosongkan PIN singleton agar tes /parent deterministik walau tes sebelumnya gagal. */
 export async function resetParentPinSingleton(): Promise<void> {

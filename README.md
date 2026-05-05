@@ -30,9 +30,59 @@ Buka **http://localhost:5173**.
 | Data      | Prisma + PostgreSQL (`DATABASE_URL`)        |
 | Validasi  | Zod (server), kontrak di `docs/api-contracts.md` |
 
-**API client (frontend):** permintaan ke `/api/*` memakai **Hono RPC** — `export type AppType` di `server/app.ts` (disnapshot sebelum mount wildcard better-auth), klien di [`src/lib/hono-client.ts`](src/lib/hono-client.ts), pembungkus domain di [`src/api.ts`](src/api.ts) dan [`src/api-admin.ts`](src/api-admin.ts). Ini menyelaraskan path dengan server tanpa menduplikasi string URL.
+**API client (frontend):** permintaan ke `/api/*` memakai **Hono RPC** — `export type AppType` di [`apps/api/src/app.ts`](apps/api/src/app.ts) (disnapshot sebelum mount wildcard better-auth); `createHcApi` / `unwrapData` di **[`packages/api-client`](packages/api-client)** (`@mainceria/api-client`), di web diikat [`apps/web/src/lib/hono-client.ts`](apps/web/src/lib/hono-client.ts) ke [`api-base-url.ts`](apps/web/src/lib/api-base-url.ts); pembungkus domain di [`apps/web/src/api.ts`](apps/web/src/api.ts) dan [`apps/web/src/api-admin.ts`](apps/web/src/api-admin.ts).
 
 > Catatan: Dokumen PRD menyebut **TanStack Start**; implementasi saat ini memakai **Vite + TanStack Router + Hono** terpisah agar stabil dan mudah di-deploy. Perilaku produk mengikuti PRD di folder `docs/`.
+
+## Struktur monorepo (pnpm)
+
+Workspace: **`apps/*`** (API + web) dan **`packages/*`** (tipe, utils, UI, config). Skema Prisma dan skrip global tetap di **root** repo.
+
+```mermaid
+graph LR
+  web[apps/web @mainceria/web]
+  api[apps/api @mainceria/api]
+  apiClient[packages/api-client]
+  ui[packages/ui]
+  configPkg[packages/config]
+  utils[packages/utils]
+  types[packages/types]
+  prisma[(prisma/schema)]
+
+  web --> apiClient
+  web --> ui
+  web --> utils
+  web --> types
+  web --> configPkg
+  apiClient --> types
+  api --> utils
+  api --> types
+  api --> configPkg
+  api --> prisma
+  types --> api
+```
+
+Ringkas lokasi penting:
+
+| Lokasi | Isi |
+| ------ | ----- |
+| `apps/api/src/` | Backend Hono, entry `index.ts` |
+| `apps/web/src/` | React + TanStack Router |
+| `apps/web/public/` | Aset statis (ikon PWA, stiker SVG, audio) → URL `/…` |
+| `packages/api-client/` | `createHcApi`, `unwrapData` — **`@mainceria/api-client`** (dipakai web + tipe `@mainceria/types`) |
+| `packages/ui/src/` | Komponen UI bersama (mis. `Button`); konsumen impor **`@mainceria/ui`** |
+| `apps/web/vite.config.ts` | Konfig Vite; build menulis **`dist/`** di root untuk Netlify |
+| `pnpm dev` | Menjalankan API + frontend ([`scripts/dev.mjs`](scripts/dev.mjs)) |
+
+Perintah per-paket (dari root):
+
+```bash
+pnpm --filter @mainceria/api dev
+pnpm --filter @mainceria/web dev:vite
+pnpm --filter @mainceria/web build
+```
+
+Detail checklist migrasi struktur ada di **[docs/recommendations.md §12](docs/recommendations.md)**.
 
 ## Deploy frontend (Netlify)
 
@@ -40,8 +90,8 @@ Buka **http://localhost:5173**.
 
 - Konfigurasi build ada di [`netlify.toml`](netlify.toml) (build → `dist`, fallback SPA).
 - **Proxy `/api/*` ke Fly** ada di [`netlify.toml`](netlify.toml) (harus **di atas** fallback `/* → index.html`). Tanpa itu, permintaan `/api` dapat mengembalikan HTML SPA → error *not valid JSON*. Sesuaikan host `to = ...fly.dev` jika nama app Fly berbeda.
-- Origin tersebut sudah termasuk di [`server/allowed-origins.ts`](server/allowed-origins.ts) untuk **CORS** dan **Better Auth** `trustedOrigins`. Tambahan domain/staging: set env **`CORS_ORIGINS`** di server API (pisahkan dengan koma).
-- **`VITE_API_URL`** (build Netlify): opsional. Kosongkan jika memakai proxy Netlify di atas; klien memakai [`apiBaseURL()`](src/lib/api-base-url.ts) (origin Netlify). Set ke URL API langsung (mis. `https://xxx.fly.dev`) jika **tidak** memakai proxy.
+- Origin tersebut sudah termasuk di [`apps/api/src/allowed-origins.ts`](apps/api/src/allowed-origins.ts) untuk **CORS** dan **Better Auth** `trustedOrigins`. Tambahan domain/staging: set env **`CORS_ORIGINS`** di server API (pisahkan dengan koma).
+- **`VITE_API_URL`** (build Netlify): opsional. Kosongkan jika memakai proxy Netlify di atas; klien memakai [`apiBaseURL()`](apps/web/src/lib/api-base-url.ts) (origin Netlify). Set ke URL API langsung (mis. `https://xxx.fly.dev`) jika **tidak** memakai proxy.
 - Pada **server API** (Fly): **`BETTER_AUTH_URL`** harus cocok dengan URL yang dipakai browser untuk auth — jika frontend memakai Netlify + proxy, biasanya **`https://game-edukatif-anak.netlify.app`** (bukan hanya URL Fly). Tetap set **`BETTER_AUTH_SECRET`** (≥32 karakter).
 
 ### Sign in with Google (orang tua) — produksi
@@ -70,7 +120,7 @@ Respons JSON harus memuat `"googleOAuth":true` (bersama `"ok":true`) saat kreden
 ## Deploy API (Railway) — Hono + PostgreSQL
 
 1. **Buat project & service** di [Railway](https://railway.app/), hubungkan repo Git yang sama, **Root directory** biarkan root (atau sesuaikan jika monorepo).
-2. **Build & start** sudah disetel di [`railway.toml`](railway.toml): build hanya `prisma generate`, start menjalankan `prisma migrate deploy` lalu API (lihat skrip **`start`** di `package.json`). Server mendengarkan **`PORT`** (otomatis dari Railway) — lihat [`server/index.ts`](server/index.ts).
+2. **Build & start** sudah disetel di [`railway.toml`](railway.toml): build hanya `prisma generate`, start menjalankan `prisma migrate deploy` lalu API (lihat skrip **`start`** di `package.json`). Proses API mendengarkan **`PORT`** (otomatis dari Railway) — lihat [`apps/api/src/index.ts`](apps/api/src/index.ts).
 3. **Variabel lingkungan** (tab *Variables* service API):
 
    | Variabel | Keterangan |
@@ -98,7 +148,7 @@ Prasyarat: [Fly CLI](https://fly.io/docs/hands-on/install-flyctl/) terpasang dan
 
    Sesuaikan nama app dan region jika diminta. Field **`app`** di [`fly.toml`](fly.toml) harus sama dengan app Fly Anda.
 
-2. **Secrets wajib** (tanpa ini proses sering **crash / restart** di Fly; dicek di [`server/boot-env.ts`](server/boot-env.ts)):
+2. **Secrets wajib** (tanpa ini proses sering **crash / restart** di Fly; dicek di [`apps/api/src/boot-env.ts`](apps/api/src/boot-env.ts)):
 
    ```bash
    fly secrets set \
@@ -150,9 +200,13 @@ Image memakai [`Dockerfile`](Dockerfile) (API: `pnpm install --prod`, `prisma ge
 ## Script berguna
 
 ```bash
-pnpm build          # build frontend production (dist/)
-pnpm check          # biome + tsc
-pnpm db:migrate     # jika memakai migrate (opsional)
+pnpm dev             # API + Vite (lihat juga dev:api / dev:vite)
+pnpm build           # frontend → ./dist/, lalu prisma generate untuk API
+pnpm preview        # tes bundle statik setelah build
+pnpm check           # biome + tsc (@mainceria/web, @mainceria/api, @mainceria/api-client)
+pnpm db:migrate      # jika memakai migrate (opsional)
+pnpm --filter @mainceria/web build
+pnpm --filter @mainceria/api dev
 ```
 
 ## Lisensi

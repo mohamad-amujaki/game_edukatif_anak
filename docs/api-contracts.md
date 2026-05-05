@@ -1,6 +1,6 @@
 # API Contracts — Game Edukatif Anak
 
-Daftar endpoint Hono yang di-mount di `/api/*`, lengkap dengan Zod schema untuk request & response. Semua schema **didefinisikan satu kali** di `src/server/utils/schemas.ts` dan di-share antara FE & BE.
+Daftar endpoint Hono yang di-mount di `/api/*`, lengkap dengan Zod schema untuk request & response. Schema permainan/orang tua **didefinisikan satu kali** di `apps/api/src/schemas.ts` (admin di `schemas.admin.ts`) dan tipe konsumen bisa di-share lewat `@mainceria/types` / importer type-only di frontend.
 
 > Convention: semua endpoint mengembalikan JSON dengan shape `{ data: T }` untuk sukses dan `{ error: { code, message, details? } }` untuk error.
 
@@ -646,12 +646,12 @@ const sessionEndedSchema = z.object({
 
 ## 9. Implementasi routing Hono (kode nyata)
 
-Sumber kebenaran: `server/app.ts`, `server/admin.ts`, `server/routes/web/`. Rute permainan & orang tua digabung lewat `webApi` (beberapa sub-app Hono), lalu admin di `/api/admin`, lalu better-auth di `/api/auth/*`.
+Sumber kebenaran: `apps/api/src/app.ts`, `apps/api/src/admin.ts`, `apps/api/src/routes/web/`. Rute permainan & orang tua digabung lewat `webApi` (beberapa sub-app Hono), lalu admin di `/api/admin`, lalu better-auth di `/api/auth/*`.
 
 **Entry & komposisi (ringkas):**
 
 ```ts
-// server/app.ts (disederhanakan)
+// apps/api/src/app.ts (disederhanakan)
 import { Hono } from 'hono';
 import { adminRouter } from './admin';
 import { auth } from './auth';
@@ -670,9 +670,9 @@ export const app = api;
 ```
 
 - **`export type AppType`** harus **sebelum** `api.on(..., '/api/auth/*', …)` agar tipe klien Hono RPC tidak tercampur wildcard auth.
-- **Domain web:** `server/routes/web/index.ts` memasang `profilesCrudApp`, `gameplayApp`, `parentAreaApp` (masing-masing mendefinisikan path penuh `/api/...`).
+- **Domain web:** `apps/api/src/routes/web/index.ts` memasang `profilesCrudApp`, `gameplayApp`, `parentAreaApp` (masing-masing mendefinisikan path penuh `/api/...`).
 
-**Klien frontend** memakai `hono/client` + `AppType`: lihat `src/lib/hono-client.ts`, `src/api.ts`, `src/api-admin.ts`. Detail arsitektur: [architecture.md — Backend & API client (implementasi aktual)](architecture.md#backend--api-client-implementasi-aktual).
+**Klien frontend** memakai `hono/client` + `AppType`: inti di `packages/api-client` (`createHcApi`, `unwrapData`), origin web di `apps/web/src/lib/hono-client.ts` + domain `apps/web/src/api.ts` / `api-admin.ts`. Detail: [architecture.md — Backend & API client (implementasi aktual)](architecture.md#backend--api-client-implementasi-aktual).
 
 > **Sketsa lama (subrouter per resource)** di bawah ini **bukan** struktur folder saat ini; disimpan hanya sebagai referensi pola Hono `app.route` bila nanti dipecah beda lagi.
 
@@ -680,7 +680,7 @@ export const app = api;
 
 ## 10. FE API Client Convention
 
-**Implementasi saat ini** memakai **Hono RPC** (`hc<AppType>`) dan helper `unwrapData` / parser admin, bukan `src/lib/api-client.ts` generik. Path HTTP diselaraskan lewat chain klien, bukan string template manual, di `src/api.ts` dan `src/api-admin.ts`.
+**Implementasi saat ini** memakai **Hono RPC** (`hc<AppType>`) dan helper `unwrapData` / parser admin, bukan `apps/web/src/lib/api-client.ts` generik. Path HTTP diselaraskan lewat chain klien, bukan string template manual, di `apps/web/src/api.ts` dan `apps/web/src/api-admin.ts`.
 
 Konvensi di bawah ini menggambarkan **pol** pembungkus fetch + TanStack Query yang masih bisa dipakai bersama data dari `api.*`:
 
@@ -754,7 +754,7 @@ flowchart TD
 
 ## 13. Open Questions
 
-- [x] **Hono RPC client** — `AppType` di `server/app.ts` + `hc` di `src/lib/hono-client.ts` + `api.ts` / `api-admin.ts` (path diselaraskan server; inferensi chain penuh terbatas pada router besar, lihat komentar di `hono-client.ts`).
+- [x] **Hono RPC client** — `AppType` di `apps/api/src/app.ts` + `packages/api-client` + pembungkus `apps/web/src/lib/hono-client.ts` dan `api.ts` / `api-admin.ts` (inferensi chain penuh terbatas; lihat komentar di `packages/api-client`).
 - [ ] Untuk parent session token: in-memory only, atau persist di sessionStorage (trade-off: convenience vs security)?
 - [ ] Heartbeat 30 detik: cukup atau perlu lebih sering (15 detik) untuk tracking lebih akurat?
 - [ ] Apakah `submit` harus include semua `answers` untuk audit, atau cukup score+mistakes?

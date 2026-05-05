@@ -44,7 +44,7 @@ Panel Admin adalah area aplikasi yang dipakai **bukan oleh anak**, melainkan ole
 ### 2.2 Super-Parent (PIN existing, bukan akun email)
 
 - Dipromosikan dari area `/parent` lewat flag `ParentSettings.isSuperParent = true`.
-- Login tetap memakai PIN existing (lihat [server/parent-session.ts](../server/parent-session.ts) & [server/pin.ts](../server/pin.ts)).
+- Login tetap memakai PIN existing (lihat [apps/api/src/parent-session.ts](../apps/api/src/parent-session.ts) & [apps/api/src/pin.ts](../apps/api/src/pin.ts)).
 - **Tidak** memakai better-auth karena flow PIN-only tanpa email/password — PIN dirancang agar hambatan masuknya rendah untuk orang tua awam.
 
 ### 2.3 Yang BUKAN persona panel admin
@@ -129,7 +129,7 @@ Prisma → SQLite
 
 ### 6.1 Otentikasi & otorisasi (better-auth)
 
-**Konfigurasi server** (`server/auth.ts`):
+**Konfigurasi server** (`apps/api/src/auth.ts`):
 
 ```ts
 import { betterAuth } from "better-auth";
@@ -159,14 +159,14 @@ export const auth = betterAuth({
 });
 ```
 
-**Mount di Hono** ([server/app.ts](../server/app.ts)):
+**Mount di Hono** ([apps/api/src/app.ts](../apps/api/src/app.ts)):
 
 ```ts
 import { auth } from "./auth";
 app.on(["POST", "GET"], "/api/auth/*", (c) => auth.handler(c.req.raw));
 ```
 
-**Middleware `requireAdminRole`** (file baru `server/admin-middleware.ts`):
+**Middleware `requireAdminRole`** (file baru `apps/api/src/admin-middleware.ts`):
 
 ```ts
 import type { Context, Next } from "hono";
@@ -184,7 +184,7 @@ export const requireAdminRole = (roles: string[]) =>
   };
 ```
 
-**Frontend** (`src/lib/auth-client.ts`):
+**Frontend** (`apps/web/src/lib/auth-client.ts`):
 
 ```ts
 import { createAuthClient } from "better-auth/react";
@@ -202,7 +202,7 @@ export const { signIn, signOut, useSession } = authClient;
 
 ```ts
 // pnpm admin:create -- --email a@b.c --password 'StrongPass!' --role super_admin
-import { auth } from "../server/auth";
+import { auth } from "../apps/api/src/auth";
 const args = parseArgs(process.argv.slice(2));
 const u = await auth.api.createUser({
   body: { email: args.email, password: args.password, name: args.name ?? args.email, role: args.role },
@@ -223,7 +223,7 @@ console.log("Created user:", u.user.id);
 
 - List level dengan filter `track`, `ageMode`, `order`.
 - Edit metadata level: `title`, `description`, `iconKey`, urutan, `voiceOverKeys`.
-- Edit `ActivityDefinition`: `title`, `type`, `voiceOverKeys`, `estimatedSec`, `payload` (full JSON, divalidasi via Zod yang ada di [server/schemas.ts](../server/schemas.ts)).
+- Edit `ActivityDefinition`: `title`, `type`, `voiceOverKeys`, `estimatedSec`, `payload` (full JSON, divalidasi via Zod yang ada di [apps/api/src/schemas.ts](../apps/api/src/schemas.ts)).
 - **Preview** payload sebelum simpan (rendering ringkas tipe per tipe).
 
 ### 6.4 Editor bank soal
@@ -339,7 +339,7 @@ GET  /api/admin/export/bank/:activityId
 GET  /api/admin/export/all
 ```
 
-Skema Zod untuk request/response endpoint admin diletakkan di file baru **`server/schemas.admin.ts`** agar terpisah dari skema gameplay.
+Skema Zod untuk request/response endpoint admin diletakkan di file baru **`apps/api/src/schemas.admin.ts`** agar terpisah dari skema gameplay.
 
 ### 6.11 Skema Prisma (final)
 
@@ -522,7 +522,7 @@ Retensi default: **180 hari** + cron pembersih bulanan + endpoint `GET /api/admi
 
 ## 10. UI/UX & navigasi
 
-**Routes** (TanStack Router di [src/router.tsx](../src/router.tsx)):
+**Routes** (TanStack Router di [apps/web/src/router.tsx](../apps/web/src/router.tsx)):
 
 ```
 /admin/login
@@ -539,7 +539,7 @@ Retensi default: **180 hari** + cron pembersih bulanan + endpoint `GET /api/admi
 /admin/users                   kelola admin lain (super_admin)
 ```
 
-- **Layout `AdminShell`** (`src/features/admin/AdminShell.tsx`): top-nav dengan menu role-aware (item disembunyikan jika role tidak punya akses).
+- **Layout `AdminShell`** (`apps/web/src/features/admin/AdminShell.tsx`): top-nav dengan menu role-aware (item disembunyikan jika role tidak punya akses).
 - **Guard route**: `beforeLoad` memanggil `authClient.getSession()` — bila tidak ada sesi → redirect `/admin/login`; bila role kurang → render halaman 403.
 - **Super-parent**: tetap di `/parent`, dengan tab tambahan `/parent/super` saat `isSuperParent` true. Tidak pernah memakai rute `/admin/*`.
 - **Bahasa**: panel admin dalam **Bahasa Indonesia** (konsisten dengan area lain). Kosakata teknis dipertahankan dalam Inggris bila lazim (mis. "DAU", "retention").
@@ -565,7 +565,7 @@ Retensi default: **180 hari** + cron pembersih bulanan + endpoint `GET /api/admi
 
 | Gelombang | Lingkup |
 | --- | --- |
-| **G0 — Setup** | `pnpm add better-auth @better-auth/prisma-adapter`; tulis `server/auth.ts`; jalankan `npx @better-auth/cli generate --output prisma/schema.prisma`; review diff; `pnpm prisma migrate dev -n add_better_auth`; mount `/api/auth/*`; buat `scripts/admin-create.ts`; smoke test login. |
+| **G0 — Setup** | `pnpm add better-auth @better-auth/prisma-adapter`; tulis `apps/api/src/auth.ts`; jalankan `npx @better-auth/cli generate --output prisma/schema.prisma`; review diff; `pnpm prisma migrate dev -n add_better_auth`; mount `/api/auth/*`; buat `scripts/admin-create.ts`; smoke test login. |
 | **G1 — RBAC + Anak + Audit** | `requireAdminRole`; `AdminShell`; `/admin/login`, `/admin`, `/admin/children` (CRUD + reset progress); `AuditLog` + helper `recordAudit`; `/admin/audit` view dasar. |
 | **G2 — Konten + Bank** | `/admin/content`, `/admin/banks/:activityId`; import/export JSON bank. |
 | **G3 — Analytics + Settings** | `/admin/analytics` (5 metrik); `/admin/settings` global. |
@@ -625,20 +625,20 @@ Retensi default: **180 hari** + cron pembersih bulanan + endpoint `GET /api/admi
 
 - [ ] `pnpm add better-auth @better-auth/prisma-adapter`
 - [ ] Tambah env: `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL`
-- [ ] Buat `server/auth.ts` (lihat §6.1)
+- [ ] Buat `apps/api/src/auth.ts` (lihat §6.1)
 - [ ] `npx @better-auth/cli generate --output prisma/schema.prisma`
 - [ ] Review diff schema; tambah model manual `AuditLog` & `AdminGlobalSettings`; tambah field `isSuperParent` ke `ParentSettings`
 - [ ] `pnpm prisma migrate dev -n add_better_auth`
-- [ ] Mount `/api/auth/*` di [server/app.ts](../server/app.ts)
-- [ ] Buat `src/lib/auth-client.ts`
+- [ ] Mount `/api/auth/*` di [apps/api/src/app.ts](../apps/api/src/app.ts)
+- [ ] Buat `apps/web/src/lib/auth-client.ts`
 - [ ] Buat `scripts/admin-create.ts` + skrip `pnpm admin:create`
 - [ ] Smoke test: create user → login via `authClient.signIn.email` → `getSession`
 
 ### G1 — RBAC + Anak + Audit dasar
 
-- [ ] `server/admin-middleware.ts` (`requireAdminRole`, `requireSuperParent`)
+- [ ] `apps/api/src/admin-middleware.ts` (`requireAdminRole`, `requireSuperParent`)
 - [ ] Helper `recordAudit` + konstanta `AuditActions`
-- [ ] `src/features/admin/AdminShell.tsx`
+- [ ] `apps/web/src/features/admin/AdminShell.tsx`
 - [ ] Routes `/admin/login`, `/admin`, `/admin/children`, `/admin/children/:id`, `/admin/audit`
 - [ ] Endpoint `/api/admin/children*` + `/api/admin/audit-log`
 - [ ] Guard route TanStack `beforeLoad` cek sesi & role
@@ -671,15 +671,15 @@ Retensi default: **180 hari** + cron pembersih bulanan + endpoint `GET /api/admi
 
 ## 17. Status implementasi (audit terhadap repo)
 
-**Kesimpulan: PRD belum 100% terimplementasi.** Yang sudah jalan: autentikasi better-auth; API `/api/admin/*` untuk anak (termasuk detail), konten, bank dengan validasi per jenis aktivitas ([server/bank-validation.ts](../server/bank-validation.ts)), import/export bank + export all, analytics (bundle + endpoint turunan), settings global + `checkContentLock`, **`GET/PATCH /api/admin/parent-settings`** (hanya `super_admin`) untuk flag **`ParentSettings.isSuperParent`**; UI **Settings** ([AdminSettingsPage.tsx](../src/features/admin/AdminSettingsPage.tsx)) memuat blok pengaturan global dan blok PIN/super-orang tua; **lima metrik MVP** di [server/services/admin-analytics.ts](../server/services/admin-analytics.ts) di dashboard + `/admin/analytics`; UI konten/editor aktivitas/editor bank; halaman **audit** ([AdminAuditPage.tsx](../src/features/admin/AdminAuditPage.tsx)) dengan kolom **tipe actor** (`ADMIN`, `SUPER_PARENT`, …), filter waktu (**from**/**to**), dan untuk **super_admin** filter **entityType** / **actorType**; jejak audit super-orang tua di [server/audit.ts](../server/audit.ts) (`recordSuperParentAudit`) untuk perubahan profil anak / reset progres dari PIN; guard API super-parent [denyUnlessSuperParent](../server/parent-super-guard.ts). Yang masih gap utama: preview payload khusus di UI (“kartu per item”), grafik retensi sesuai §10 (opsional), benchmark SLA §13 #7, serta polish matriks analyst vs konten di beberapa endpoint.
+**Kesimpulan: PRD belum 100% terimplementasi.** Yang sudah jalan: autentikasi better-auth; API `/api/admin/*` untuk anak (termasuk detail), konten, bank dengan validasi per jenis aktivitas ([apps/api/src/bank-validation.ts](../apps/api/src/bank-validation.ts)), import/export bank + export all, analytics (bundle + endpoint turunan), settings global + `checkContentLock`, **`GET/PATCH /api/admin/parent-settings`** (hanya `super_admin`) untuk flag **`ParentSettings.isSuperParent`**; UI **Settings** ([AdminSettingsPage.tsx](../apps/web/src/features/admin/AdminSettingsPage.tsx)) memuat blok pengaturan global dan blok PIN/super-orang tua; **lima metrik MVP** di [apps/api/src/services/admin-analytics.ts](../apps/api/src/services/admin-analytics.ts) di dashboard + `/admin/analytics`; UI konten/editor aktivitas/editor bank; halaman **audit** ([AdminAuditPage.tsx](../apps/web/src/features/admin/AdminAuditPage.tsx)) dengan kolom **tipe actor** (`ADMIN`, `SUPER_PARENT`, …), filter waktu (**from**/**to**), dan untuk **super_admin** filter **entityType** / **actorType**; jejak audit super-orang tua di [apps/api/src/audit.ts](../apps/api/src/audit.ts) (`recordSuperParentAudit`) untuk perubahan profil anak / reset progres dari PIN; guard API super-parent [denyUnlessSuperParent](../apps/api/src/parent-super-guard.ts). Yang masih gap utama: preview payload khusus di UI (“kartu per item”), grafik retensi sesuai §10 (opsional), benchmark SLA §13 #7, serta polish matriks analyst vs konten di beberapa endpoint.
 
 | Gelombang | Selesai? | Bukti / gap |
 | --- | --- | --- |
-| **G0** | **Hampir penuh** | Ada `better-auth`, `server/auth.ts`, `disableSignUp: true` (bukan pendaftaran publik), mount `/api/auth/*`, `User`/`Session`/`Account`/`Verification`, [src/lib/auth-client.ts](../src/lib/auth-client.ts), [scripts/admin-create.ts](../scripts/admin-create.ts) (Prisma + `hashPassword` dari `better-auth/crypto`). Env: [.env.example](../.env.example). Skema auth bisa juga di-regenerate via `pnpm auth:generate`. |
-| **G1** | **Sebagian** | Ada [server/admin-middleware.ts](../server/admin-middleware.ts), [server/audit.ts](../server/audit.ts), [server/admin.ts](../server/admin.ts). Nav shell + sidebar role-aware; [router](../src/router.tsx) punya **`/admin/children/$childId`** ([AdminChildDetailPage.tsx](../src/features/admin/AdminChildDetailPage.tsx)); [AdminAuditPage.tsx](../src/features/admin/AdminAuditPage.tsx) fungsional. **Belum / parsial:** checklist §16 menyebut nama `requireSuperParent` — di kode guard bernama **`denyUnlessSuperParent`** ([parent-super-guard.ts](../server/parent-super-guard.ts)); matriks analyst vs konten belum dipetakan penuh di semua rute. |
-| **G2** | **Sebagian (inti konten/bank kuat)** | Endpoint level/aktivitas/bank/import/export di [server/admin.ts](../server/admin.ts); validasi bank via [bank-validation.ts](../server/bank-validation.ts). UI: [AdminContentPage.tsx](../src/features/admin/AdminContentPage.tsx), editor aktivitas/bank, [AdminImportExportPage.tsx](../src/features/admin/AdminImportExportPage.tsx) (bukan placeholder). **Belum:** preview payload khusus di UI; editor bank tetap berbasis JSON utuh untuk beberapa kasus. |
-| **G3** | **Sebagian** | Analytics + cache seperti sebelumnya; [AdminSettingsPage.tsx](../src/features/admin/AdminSettingsPage.tsx) terhubung ke API (global + blok PIN super-orang tua untuk `super_admin`). **Belum:** grafik batang/tabel retensi seperti checklist §16 G3 (opsional). |
-| **G4** | **Sebagian** | [AdminUsersPage.tsx](../src/features/admin/AdminUsersPage.tsx) memakai better-auth admin API; rute **`/parent/super`** ada di [router](../src/router.tsx); flag **`isSuperParent`** dapat diatur dari admin (`/admin/settings`) dan dicek di **`denyUnlessSuperParent`**. **Belum:** ekspor CSV (opsional); plugin 2FA (opsional); audit retensi cron. |
+| **G0** | **Hampir penuh** | Ada `better-auth`, `apps/api/src/auth.ts`, `disableSignUp: true` (bukan pendaftaran publik), mount `/api/auth/*`, `User`/`Session`/`Account`/`Verification`, [apps/web/src/lib/auth-client.ts](../apps/web/src/lib/auth-client.ts), [scripts/admin-create.ts](../scripts/admin-create.ts) (Prisma + `hashPassword` dari `better-auth/crypto`). Env: [.env.example](../.env.example). Skema auth bisa juga di-regenerate via `pnpm auth:generate`. |
+| **G1** | **Sebagian** | Ada [apps/api/src/admin-middleware.ts](../apps/api/src/admin-middleware.ts), [apps/api/src/audit.ts](../apps/api/src/audit.ts), [apps/api/src/admin.ts](../apps/api/src/admin.ts). Nav shell + sidebar role-aware; [router](../apps/web/src/router.tsx) punya **`/admin/children/$childId`** ([AdminChildDetailPage.tsx](../apps/web/src/features/admin/AdminChildDetailPage.tsx)); [AdminAuditPage.tsx](../apps/web/src/features/admin/AdminAuditPage.tsx) fungsional. **Belum / parsial:** checklist §16 menyebut nama `requireSuperParent` — di kode guard bernama **`denyUnlessSuperParent`** ([parent-super-guard.ts](../apps/api/src/parent-super-guard.ts)); matriks analyst vs konten belum dipetakan penuh di semua rute. |
+| **G2** | **Sebagian (inti konten/bank kuat)** | Endpoint level/aktivitas/bank/import/export di [apps/api/src/admin.ts](../apps/api/src/admin.ts); validasi bank via [bank-validation.ts](../apps/api/src/bank-validation.ts). UI: [AdminContentPage.tsx](../apps/web/src/features/admin/AdminContentPage.tsx), editor aktivitas/bank, [AdminImportExportPage.tsx](../apps/web/src/features/admin/AdminImportExportPage.tsx) (bukan placeholder). **Belum:** preview payload khusus di UI; editor bank tetap berbasis JSON utuh untuk beberapa kasus. |
+| **G3** | **Sebagian** | Analytics + cache seperti sebelumnya; [AdminSettingsPage.tsx](../apps/web/src/features/admin/AdminSettingsPage.tsx) terhubung ke API (global + blok PIN super-orang tua untuk `super_admin`). **Belum:** grafik batang/tabel retensi seperti checklist §16 G3 (opsional). |
+| **G4** | **Sebagian** | [AdminUsersPage.tsx](../apps/web/src/features/admin/AdminUsersPage.tsx) memakai better-auth admin API; rute **`/parent/super`** ada di [router](../apps/web/src/router.tsx); flag **`isSuperParent`** dapat diatur dari admin (`/admin/settings`) dan dicek di **`denyUnlessSuperParent`**. **Belum:** ekspor CSV (opsional); plugin 2FA (opsional); audit retensi cron. |
 
 ### Acceptance criteria §13 (singkat)
 
@@ -687,9 +687,9 @@ Retensi default: **180 hari** + cron pembersih bulanan + endpoint `GET /api/admi
 | --- | --- | --- |
 | 1 | Sebagian | Bootstrap: `pnpm admin:create -- --email … --password …` (role tetap `super_admin`; tidak ada flag `--role`). |
 | 2–4 | Manual | Login & sesi: uji lewat `/admin/login` + cookie. |
-| 5 | Parsial | Bank di-validasi per jenis aktivitas di server ([bank-validation.ts](../server/bank-validation.ts)); UI tetap banyak berbasis JSON; verifikasi “permainan pakai bank baru tanpa restart server” bersifat manual. |
+| 5 | Parsial | Bank di-validasi per jenis aktivitas di server ([bank-validation.ts](../apps/api/src/bank-validation.ts)); UI tetap banyak berbasis JSON; verifikasi “permainan pakai bank baru tanpa restart server” bersifat manual. |
 | 6 | Parsial | `recordAudit` + untuk PIN super-orang tua `recordSuperParentAudit`; tidak semua path diverifikasi E2E. |
-| 7 | Sebagian | **Lima metrik MVP** ada di API & UI ([router](../src/router.tsx) dashboard + `/admin/analytics`); cache 5 menit. **SLA &lt;1,5 dtk @ 1k profil SQLite** belum diverifikasi otomatis / benchmark. |
+| 7 | Sebagian | **Lima metrik MVP** ada di API & UI ([router](../apps/web/src/router.tsx) dashboard + `/admin/analytics`); cache 5 menit. **SLA &lt;1,5 dtk @ 1k profil SQLite** belum diverifikasi otomatis / benchmark. |
 | 8 | Parsial | Rute **`/parent/super`** + guard **`denyUnlessSuperParent`** + audit super-parent; **`isSuperParent`** dapat diatur **`super_admin`** lewat **`/admin/settings`** / **`PATCH /api/admin/parent-settings`**. |
 | 9 | Tidak | Import JSON error per-index belakangan sesuai PRD. |
 | 10 | Manual | Revoke sesi lewat better-auth admin API / UI belum di-shell. |

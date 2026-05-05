@@ -60,7 +60,7 @@ gantt
 | 6  | Setup BiomeJS config + format/lint                                  | 2j       |
 | 7  | Setup Husky + pre-commit hook (biome check + tsc)                   | 2j       |
 | 8  | Setup Vitest (unit) + Playwright (e2e) — minimal config             | 3j       |
-| 9  | Setup Jotai store dasar + struktur `src/state/`                     | 2j       |
+| 9  | Setup Jotai store dasar + struktur `apps/web/src/state/`                     | 2j       |
 | 10 | Setup TanStack Router file-based routing                            | 3j       |
 | 11 | Buat 1 endpoint dummy `GET /api/health` + tampilkan di FE          | 2j       |
 | 12 | Setup deployment ke staging (Fly.io / Railway)                      | 4j       |

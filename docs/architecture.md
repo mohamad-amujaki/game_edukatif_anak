@@ -27,7 +27,7 @@ flowchart LR
 
     subgraph Storage[File System Lokal Server]
         SQLite[(SQLite<br/>file: app.db)]
-        Assets[public/<br/>img, audio, lottie]
+        Assets[apps/web/public/<br/>img, audio, lottie]
     end
 
     UI -->|HTTP / fetch| Router
@@ -51,96 +51,25 @@ flowchart LR
 
 ## 2. Project Structure
 
-Single repository, single app. Struktur direkomendasikan:
+Single repository, **pnpm workspace** (`apps/*`, `packages/*`). Ringkasan struktur:
 
 ```
 game_edukatif_anak/
 ├─ docs/                          # Dokumentasi (PRD, dll.)
-├─ public/                        # Static asset disajikan apa adanya
-│  ├─ img/
-│  │  ├─ avatars/                 # Avatar preset (panda, kucing, dll.)
-│  │  ├─ stickers/                # Sticker katalog
-│  │  ├─ illustrations/           # Ilustrasi aktivitas (apel, sapi, dll.)
-│  │  └─ mascot/                  # Asset mascot Bimo
-│  ├─ audio/
-│  │  ├─ vo/                      # Voice-over (narasi instruksi)
-│  │  │  ├─ id/                   # Bahasa Indonesia
-│  │  │  └─ ...                   # (post-MVP: en, dll.)
-│  │  ├─ sfx/                     # Sound effect (correct, wrong, levelup)
-│  │  └─ music/                   # Background music
-│  └─ lottie/                     # Animasi Lottie JSON
-├─ src/
-│  ├─ routes/                     # TanStack Router file-based routes
-│  │  ├─ __root.tsx
-│  │  ├─ index.tsx                # Landing / profile picker
-│  │  ├─ onboarding/
-│  │  ├─ profile/$childId/
-│  │  │  ├─ dashboard.tsx
-│  │  │  ├─ levels.$track.tsx
-│  │  │  ├─ play.$activityId.tsx
-│  │  │  ├─ result.tsx
-│  │  │  └─ album.tsx
-│  │  ├─ parent/                  # PIN-protected routes
-│  │  │  ├─ index.tsx
-│  │  │  ├─ children.tsx
-│  │  │  ├─ settings.tsx
-│  │  │  └─ change-pin.tsx
-│  │  └─ api/                     # Hono mounted di sini
-│  │     └─ $.ts                  # Catch-all -> route ke Hono app
-│  ├─ server/                     # Backend logic (Hono + Prisma)
-│  │  ├─ app.ts                   # Hono app utama, mount semua route
-│  │  ├─ routes/
-│  │  │  ├─ profiles.ts
-│  │  │  ├─ levels.ts
-│  │  │  ├─ activities.ts
-│  │  │  ├─ parent.ts
-│  │  │  └─ wellness.ts
-│  │  ├─ services/                # Business logic (rewardEngine, masteryEngine)
-│  │  │  ├─ reward-engine.ts
-│  │  │  ├─ mastery-engine.ts
-│  │  │  └─ streak-engine.ts
-│  │  ├─ db/
-│  │  │  ├─ client.ts             # Prisma client singleton
-│  │  │  └─ seed.ts               # Seed konten level + sticker catalog
-│  │  └─ utils/
-│  │     ├─ pin.ts                # Hash & verify PIN
-│  │     └─ schemas.ts            # Zod schema shared FE/BE
-│  ├─ features/                   # FE features (per domain)
-│  │  ├─ onboarding/
-│  │  ├─ profile/
-│  │  ├─ dashboard/
-│  │  ├─ play/
-│  │  │  ├─ HuruflGambarMatching.tsx
-│  │  │  ├─ SusunSukuKata.tsx
-│  │  │  ├─ HitungBenda.tsx
-│  │  │  └─ ... (per mini-game)
-│  │  ├─ reward/
-│  │  ├─ album/
-│  │  └─ parent/
-│  ├─ components/                 # Shared UI components
-│  │  ├─ ui/                      # Atomic: Button, Card, Modal
-│  │  ├─ feedback/                # StarBurst, Confetti, LevelUpBanner
-│  │  └─ mascot/                  # Mascot Bimo + balon dialog
-│  ├─ hooks/
-│  │  ├─ useAudio.ts              # Hook play VO, SFX, BGM
-│  │  ├─ useWellness.ts           # Track time + break reminder
-│  │  └─ useChildProfile.ts
-│  ├─ state/                      # Jotai atoms
-│  │  ├─ session.ts               # currentChildId, currentRoute
-│  │  ├─ play.ts                  # gameSession (score, mistakes, attempts)
-│  │  ├─ audio.ts                 # musicVolume, sfxVolume, voEnabled
-│  │  └─ wellness.ts              # sessionStart, breaksTakenToday
-│  ├─ lib/
-│  │  ├─ api-client.ts            # Wrapper fetch + Zod parse
-│  │  └─ constants.ts
-│  ├─ styles/
-│  │  └─ globals.css              # Tailwind + custom CSS variables
-│  └─ types/
-│     └─ index.ts                 # Tipe shared
+├─ apps/
+│  ├─ web/                        # Paket frontend Vite
+│  │  ├─ index.html
+│  │  ├─ vite.config.ts
+│  │  ├─ public/                  # Aset statis (/icons, /img, /audio …)
+│  │  └─ src/                     # React + TanStack Router
+│  │     ├─ main.tsx, router.tsx, api.ts, features/, …
+│  └─ api/src/                    # Backend Hono + Prisma
+│     ├─ index.ts, app.ts, auth.ts, admin.ts, routes/web/, services/, …
+├─ packages/                      # Shared: api-client, config, types, utils, ui
 ├─ prisma/
 │  ├─ schema.prisma
 │  ├─ migrations/
-│  └─ seed.ts                     # Entry seed (memanggil src/server/db/seed.ts)
+│  └─ seed.ts                     # Entry seed (lihat `prisma/seed.ts`)
 ├─ scripts/
 │  └─ generate-vo.ts              # Helper batch-generate voice-over (opsional)
 ├─ tests/
@@ -149,7 +78,6 @@ game_edukatif_anak/
 ├─ .husky/
 ├─ biome.json
 ├─ tsconfig.json
-├─ vite.config.ts                 # (atau app.config.ts untuk TanStack Start)
 ├─ package.json
 ├─ pnpm-lock.yaml
 ├─ .env.example
@@ -159,19 +87,19 @@ game_edukatif_anak/
 ### Alasan struktur
 
 - **`features/` per domain**: bukan per type (components/, pages/), supaya kode yang related (UI + logic mini-game) berada di satu folder. Lebih maintainable saat tim besar.
-- **`server/` di root repo**: backend Hono terpisah dari bundle Vite; share tipe ke frontend lewat `import type` + alias `@server` (bukan import runtime).
+- **`apps/api/src/` di root repo**: backend Hono terpisah dari bundle Vite; share tipe ke frontend lewat `import type` dari `@mainceria/types` (bukan import runtime API ke bundle).
 - **`hooks/` & `state/` terpisah**: hooks adalah "perilaku React-y", state adalah "data global" (Jotai atoms).
 
 ### Backend & API client (implementasi aktual)
 
 Struktur pohon di atas sebagian masih **target**; berikut yang ada di repositori sekarang untuk Hono dan klien API.
 
-**Proses development:** `pnpm dev` menjalankan **dua proses** — API Hono (default port 3000, `server/index.ts`) dan Vite (`vite.config.ts` mem-proxy `/api` ke API). Permintaan browser ke `http://localhost:5173/api/...` diteruskan ke backend.
+**Proses development:** `pnpm dev` menjalankan **dua proses** — API Hono (default port 3000, `apps/api/src/index.ts`) dan Vite (**`apps/web/vite.config.ts`**, root proyek = `apps/web`, keluaran build ke **`dist/`** di root repo untuk Netlify). Permintaan browser ke `http://localhost:5173/api/...` diteruskan ke backend.
 
-**Layout `server/` (ringkas):**
+**Layout `apps/api/src/` (ringkas):**
 
 ```
-server/
+apps/api/src/
 ├─ index.ts                 # @hono/node-server → app.fetch
 ├─ app.ts                   # root Hono: CORS, prettyJSON, mount admin + web, export AppType, better-auth
 ├─ admin.ts                 # /api/admin/* (panel admin, RBAC)
@@ -187,17 +115,17 @@ server/
 └─ db.ts, audit.ts, pin.ts, parent-session.ts, …
 ```
 
-**Hono RPC (frontend):** `export type AppType = typeof api` di `server/app.ts` diposisikan **setelah** mount route admin & web, **sebelum** `api.on(['POST','GET'], '/api/auth/*', …)`. Wildcard better-auth harus **tidak** ikut ke snapshot tipe agar klien `hc<AppType>()` tetap masuk akal. Klien: `src/lib/hono-client.ts` (`hc`, `unwrapData` untuk respons `{ data: T }`), pembungkus domain `src/api.ts` dan `src/api-admin.ts`. Alias `@server` di `tsconfig.json` + `vite.config.ts` mendukung `import type { AppType } from '@server/app'` tanpa mengimpor runtime server ke bundle.
+**Hono RPC (frontend):** `export type AppType = typeof api` di `apps/api/src/app.ts` diposisikan **setelah** mount route admin & web, **sebelum** `api.on(['POST','GET'], '/api/auth/*', …)`. Wildcard better-auth harus **tidak** ikut ke snapshot tipe agar klien `hc<AppType>()` tetap masuk akal. Pembuatan klien: **`packages/api-client`** (`createHcApi`, `unwrapData` untuk respons `{ data: T }`); **`apps/web/src/lib/hono-client.ts`** mengikat **`apiBaseURL()`** (Vite/origin browser). Pembungkus domain `apps/web/src/api.ts` dan `apps/web/src/api-admin.ts`. Paket `@mainceria/types` mengekspor `AppType` untuk `import type`.
 
-**Keterbatasan tipe:** inferensi chain `hc<AppType>()` pada gabungan router besar sering jatuh ke `unknown` di TypeScript; satu assertion terpusat di `hono-client.ts` (dengan komentar) — jangan menambah duplikasi path string di luar `api.ts` / `api-admin.ts`.
+**Keterbatasan tipe:** inferensi chain `hc<AppType>()` pada gabungan router besar sering jatuh ke `unknown` di TypeScript; satu assertion terpusat di **`packages/api-client`** (dengan komentar) — jangan menambah duplikasi path string di luar `api.ts` / `api-admin.ts`.
 
 **Troubleshooting singkat**
 
 | Gejala | Periksa |
 | --- | --- |
-| Cookie admin tidak terkirim | Request same-origin lewat Vite; `credentials: 'include'` sudah di `hono-client` |
-| CORS error | Origin browser harus masuk daftar `cors()` di `server/app.ts` |
-| `AppType` / import `@server/app` | Pastikan alias `@server` di Vite selaras dengan `tsconfig` paths |
+| Cookie admin tidak terkirim | Request same-origin lewat Vite; `credentials: 'include'` sudah di **`@mainceria/api-client`** |
+| CORS error | Origin browser harus masuk daftar `cors()` di `apps/api/src/app.ts` |
+| `AppType` / tipe Hono | Pastikan `packages/types` mere-export `AppType` dari `apps/api/src/app.ts` |
 
 ---
 
@@ -304,8 +232,10 @@ sequenceDiagram
 
 ### 5.3 Asset Naming Convention
 
+Path relatif ke root Vite (**`apps/web/public/`** dalam monorepo). URL tetap seperti `play('/audio/…')`.
+
 ```
-public/audio/vo/id/
+apps/web/public/audio/vo/id/
 ├─ ui/                            # narasi UI umum
 │  ├─ welcome.mp3
 │  ├─ pilih-mode.mp3
@@ -470,7 +400,7 @@ pnpm biome check --write --staged && pnpm tsc --noEmit
 
 ### 9.5 Type Safety End-to-End
 
-- Zod schema **didefinisikan satu kali** di `src/server/utils/schemas.ts`.
+- Zod schema **didefinisikan satu kali** di `apps/api/src/schemas.ts` (dan `schemas.admin.ts` untuk admin).
 - BE pakai untuk validasi request body & response shape.
 - FE pakai schema yang sama untuk validate response & inferensi type.
 - Pertimbangkan tambah **tRPC** atau **Hono RPC client** jika ingin type-safe full-stack tanpa duplikasi.
