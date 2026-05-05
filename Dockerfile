@@ -9,10 +9,11 @@ WORKDIR /app
 
 RUN corepack enable && corepack prepare pnpm@9 --activate
 
-COPY package.json pnpm-lock.yaml ./
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY prisma.config.ts ./
 COPY prisma ./prisma
-COPY server ./server
+COPY apps ./apps
+COPY packages ./packages
 COPY tsconfig.json ./
 
 ENV NODE_ENV=production

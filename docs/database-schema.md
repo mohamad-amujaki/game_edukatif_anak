@@ -313,7 +313,7 @@ enum XpSource {
 model StickerCatalog {
   id        String  @id // contoh: "sticker-panda-bahagia"
   name      String
-  imagePath String  // path ke /public/img/stickers/...
+  imagePath String  // path URL publik, mis. /img/stickers/… (file di apps/web/public/img/stickers/)
   rarity    Rarity
   theme     String  // contoh: "hewan", "buah", "kendaraan"
 
@@ -458,7 +458,7 @@ pnpm prisma migrate dev --name init
 
 ### 5.2 Seed
 
-`prisma/seed.ts` (entry) memanggil `src/server/db/seed.ts` yang berisi:
+`prisma/seed.ts` (entry) berisi:
 
 1. **`ParentSettings`** singleton dengan default values, `pinHash = null` (belum diset, akan di-set saat onboarding).
 2. **`StickerCatalog`** ~30 sticker (10 common, 10 rare, 10 epic) dengan tema bervariasi.

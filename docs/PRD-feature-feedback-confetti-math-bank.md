@@ -51,7 +51,7 @@ Dokumen ini mendefinisikan **dua penambahan fitur** yang akan dikembangkan setel
 | Aspek | Spesifikasi |
 | ----- | ----------- |
 | **Trigger** | Segera setelah jawaban salah untuk satu langkah. |
-| **Asset** | Satu file SFX tetap, misalnya `public/audio/sfx/wrong-soft.mp3` (sesuai naming [architecture.md](architecture.md)). |
+| **Asset** | Satu file SFX tetap, misalnya **`apps/web/public/audio/wrong-soft.mp3`** atau `apps/web/public/audio/sfx/wrong-soft.mp3` sesuai konvensi [architecture.md](architecture.md) (URL `/audio/…`). |
 | **Karakter suara** | Pendek (**≤ 500 ms**), nada **lembut** (bukan buzzer keras); konsisten dengan token `--color-error` yang “tidak menghukum”. |
 | **Volume** | Mengikuti slider **SFX** di pengaturan; **duck** BGM jika sedang aktif (polarisasi dengan VO di PRD induk). |
 | **Pengulangan** | Jika anak salah berkali-kali berturut-turut pada soal yang sama, boleh **throttle** main ulang SFX (mis. minimal jarak **150 ms**) untuk hindari iritasi — opsional, dokumentasikan di implementasi. |
@@ -70,7 +70,7 @@ Dokumen ini mendefinisikan **dua penambahan fitur** yang akan dikembangkan setel
 
 ### 2.6 Implementasi teknis (garis besar)
 
-- **Frontend**: hook `useFeedback()` atau wrapper pada handler jawaban di [`ActivityPlayer`](src/features/ActivityPlayer.tsx) (dan komponen turunan).
+- **Frontend**: hook `useFeedback()` atau wrapper pada handler jawaban di [`ActivityPlayer`](apps/web/src/features/ActivityPlayer.tsx) (dan komponen turunan).
 - **State**: tidak mengubah skor server; hanya presentasi.
 - **Tes**: minimal satu tes komponen atau E2E untuk “klik salah → audio dipanggil” (mock audio).
 

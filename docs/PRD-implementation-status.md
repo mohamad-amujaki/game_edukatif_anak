@@ -1,7 +1,7 @@
 # Status implementasi vs dokumen `docs/`
 
 Dokumen ini memetakan **apa yang sudah dibangun** di repo saat ini terhadap isi [PRD.md](PRD.md), [PRD-feature-feedback-confetti-math-bank.md](PRD-feature-feedback-confetti-math-bank.md), [PRD-feature-literasi-question-bank.md](PRD-feature-literasi-question-bank.md), [PRD-recommended-backlog-levels-4-10.md](PRD-recommended-backlog-levels-4-10.md), [PRD-feature-admin-panel.md](PRD-feature-admin-panel.md), dan [roadmap.md](roadmap.md).  
-**Kode acuan**: struktur `src/`, `server/`, `prisma/` (perkiraan update: 2026-05-04).
+**Kode acuan**: struktur `apps/web/src/`, `apps/api/src/`, `prisma/` (perkiraan update: 2026-05-04).
 
 Legenda: **Selesai** = perilaku inti ada di kode; **Sebagian** = dasar/placeholder/back-end saja; **Belum** = tidak ada atau hanya tercatat di dokumen.
 
@@ -15,11 +15,11 @@ Legenda: **Selesai** = perilaku inti ada di kode; **Sebagian** = dasar/placehold
 | Jalur Literasi & Matematika | Selesai | Rute `/track/literasi`, `/track/math` + seed |
 | 12 level (3×2×2) + aktivitas | Selesai | Seed 12 `LevelDefinition` + aktivitas |
 | 7 jenis mini-game | Selesai | `ActivityPlayer` + tipe `ActivityType` di Prisma |
-| Multi-profil (max 4) | Selesai | Batas **per `ownerUserId` (parent)** atau **per cookie tamu `guestBindingId`** — [profiles-crud.ts](../server/routes/web/profiles-crud.ts) + [child-access.ts](../server/child-access.ts) |
+| Multi-profil (max 4) | Selesai | Batas **per `ownerUserId` (parent)** atau **per cookie tamu `guestBindingId`** — [profiles-crud.ts](../apps/api/src/routes/web/profiles-crud.ts) + [child-access.ts](../apps/api/src/child-access.ts) |
 | Bintang, XP, streak, stiker, badge | Sebagian | **Album stiker** `/p/:childId/stickers` + API `GET .../stickers`; XP quest **+15** & naik level konten **+50** di `submit-activity` |
 | Audio / VO instruksi | Sebagian | **Instruksi teks** dibacakan lewat Web Speech API (`ActivityPlayer` + `voiceOverKeys.instruksi`); file MP3 di seed opsional |
 | Parent area (PIN, progres, time cap, break) | Sebagian | PIN + laporan + **UI pengaturan** (batas harian, reminder istirahat, musik/SFX/motion) di `/parent` sesi aktif; perilaku anak lewat wellness overlay |
-| Onboarding (bahasa, tutorial) | Sebagian | **`/`** = [HomeLanding](../src/features/home/HomeLanding.tsx) (tamu default); **`/auth/sign-up`** & **`/auth/sign-in`**; **Tutorial 4 langkah** per profil; bahasa ID default; PIN area orang tua |
+| Onboarding (bahasa, tutorial) | Sebagian | **`/`** = [HomeLanding](../apps/web/src/features/home/HomeLanding.tsx) (tamu default); **`/auth/sign-up`** & **`/auth/sign-in`**; **Tutorial 4 langkah** per profil; bahasa ID default; PIN area orang tua |
 | Akun orang tua (email, Google) & progres cloud | Sebagian | `defaultRole: parent` + OAuth Google opsional env; `ChildProfile.ownerUserId`; **migrasi tamu → akun** & verifikasi email tegas belum |
 | Wellness (istirahat, batas waktu) | Sebagian | **`PlayWellnessOverlay`** di halaman bermain: akumulasi waktu + modal istirahat + blok saat cap harian (`sessionStorage` per anak/hari) |
 | Offline PWA | Sebagian | **`vite-plugin-pwa`**: manifest + service worker + precache build; dev tetap dua server |
@@ -80,11 +80,11 @@ Legenda: **Selesai** = perilaku inti ada di kode; **Sebagian** = dasar/placehold
 
 | Gelombang / Item | Status | Catatan |
 | ----------------- | ------ | ------- |
-| **G0** better-auth, mount `/api/auth/*`, bootstrap `pnpm admin:create`, signup publik **`parent`**, Google opsional | **Selesai (inti)** | [server/auth.ts](../server/auth.ts), `/admin/signup` = instruksi CLI; panel admin login terpisah. |
-| **G1** RBAC, anak, audit | **Sebagian** | [server/admin.ts](../server/admin.ts), [server/admin-middleware.ts](../server/admin-middleware.ts), [server/audit.ts](../server/audit.ts), `recordSuperParentAudit`; [src/router.tsx](../src/router.tsx) termasuk **`/admin/children/$childId`**; [AdminAuditPage.tsx](../src/features/admin/AdminAuditPage.tsx): kolom tipe actor; filter **`from`/`to`** (datetime lokal); **`super_admin`** juga filter `entityType` / **`actorType`**; tombol hapus filter. **Parsial:** PRD menyebut `requireSuperParent` — di kode [parent-super-guard.ts](../server/parent-super-guard.ts) **`denyUnlessSuperParent`**. |
-| **G2** Konten, bank, import/export | **Sebagian** | Editor konten/bank; [bank-validation.ts](../server/bank-validation.ts); [AdminImportExportPage.tsx](../src/features/admin/AdminImportExportPage.tsx). **Belum:** preview payload “kartu per item” di UI. |
-| **G3** Analytics 5 metrik, settings | **Sebagian** | [server/services/admin-analytics.ts](../server/services/admin-analytics.ts); halaman `/admin/analytics`; [AdminSettingsPage.tsx](../src/features/admin/AdminSettingsPage.tsx) (global + blok PIN **`isSuperParent`** untuk `super_admin`). **Belum:** grafik batang retensi seperti checklist §16 G3. |
-| **G4** Users admin, super-parent | **Sebagian** | [AdminUsersPage.tsx](../src/features/admin/AdminUsersPage.tsx); rute **`/parent/super`**; **`PATCH /api/admin/parent-settings`** + audit `PARENT_SUPER_FLAG_UPDATE`. **Belum:** ekspor CSV, 2FA, audit retensi cron. |
+| **G0** better-auth, mount `/api/auth/*`, bootstrap `pnpm admin:create`, signup publik **`parent`**, Google opsional | **Selesai (inti)** | [apps/api/src/auth.ts](../apps/api/src/auth.ts), `/admin/signup` = instruksi CLI; panel admin login terpisah. |
+| **G1** RBAC, anak, audit | **Sebagian** | [apps/api/src/admin.ts](../apps/api/src/admin.ts), [apps/api/src/admin-middleware.ts](../apps/api/src/admin-middleware.ts), [apps/api/src/audit.ts](../apps/api/src/audit.ts), `recordSuperParentAudit`; [apps/web/src/router.tsx](../apps/web/src/router.tsx) termasuk **`/admin/children/$childId`**; [AdminAuditPage.tsx](../apps/web/src/features/admin/AdminAuditPage.tsx): kolom tipe actor; filter **`from`/`to`** (datetime lokal); **`super_admin`** juga filter `entityType` / **`actorType`**; tombol hapus filter. **Parsial:** PRD menyebut `requireSuperParent` — di kode [parent-super-guard.ts](../apps/api/src/parent-super-guard.ts) **`denyUnlessSuperParent`**. |
+| **G2** Konten, bank, import/export | **Sebagian** | Editor konten/bank; [bank-validation.ts](../apps/api/src/bank-validation.ts); [AdminImportExportPage.tsx](../apps/web/src/features/admin/AdminImportExportPage.tsx). **Belum:** preview payload “kartu per item” di UI. |
+| **G3** Analytics 5 metrik, settings | **Sebagian** | [apps/api/src/services/admin-analytics.ts](../apps/api/src/services/admin-analytics.ts); halaman `/admin/analytics`; [AdminSettingsPage.tsx](../apps/web/src/features/admin/AdminSettingsPage.tsx) (global + blok PIN **`isSuperParent`** untuk `super_admin`). **Belum:** grafik batang retensi seperti checklist §16 G3. |
+| **G4** Users admin, super-parent | **Sebagian** | [AdminUsersPage.tsx](../apps/web/src/features/admin/AdminUsersPage.tsx); rute **`/parent/super`**; **`PATCH /api/admin/parent-settings`** + audit `PARENT_SUPER_FLAG_UPDATE`. **Belum:** ekspor CSV, 2FA, audit retensi cron. |
 | Acceptance criteria §13 | **Parsial** | Lihat tabel §17 di PRD panel admin. |
 
 ---
@@ -94,7 +94,7 @@ Legenda: **Selesai** = perilaku inti ada di kode; **Sebagian** = dasar/placehold
 | Area | Status | Catatan |
 | ---- | ------ | ------- |
 | Phase 0: tooling, Vite, Hono, Prisma, Biome | Selesai (inti) | TanStack Router + Hono; **TanStack Start** di roadmap terganti stack aktual |
-| Vitest + Playwright | Sebagian | `pnpm test` (Vitest `src/**/*.test.ts`), `pnpm test:e2e` (Playwright); **instal browser sekali:** `pnpm exec playwright install chromium` |
+| Vitest + Playwright | Sebagian | `pnpm test` (Vitest `apps/web/src/**/*.test.ts`), `pnpm test:e2e` (Playwright); **instal browser sekali:** `pnpm exec playwright install chromium` |
 | Husky pre-commit | Belum | Tidak di `package.json` |
 | GitHub Actions CI | Sebagian | Workflow `.github/workflows/ci.yml` — migrate, check, unit test, build, e2e |
 | Phase 1–2: 7 game, profil, parent, streak, album | Sebagian | Game + profil + parent + backend reward/streak; **sticker album page**, **wellness UI**, **VO penuh** belum penuh |
@@ -117,7 +117,7 @@ Legenda: **Selesai** = perilaku inti ada di kode; **Sebagian** = dasar/placehold
 
 ## 7. Ringkasan satu halaman
 
-**PRD v1.1 vs kode:** **akun bermain orang tua** (`role: parent`, email/Google opsional), **hingga 4 profil** per akun, **tamu** dengan penyekat cookie + **otorisasi** permainan per profil (**[child-access.ts](../server/child-access.ts)**), halaman utama = beranda pemain (**[HomeLanding.tsx](../src/features/home/HomeLanding.tsx)**) dengan banner daftar/masuk. **Belum diprioritaskan:** merge progres tamu ke akun, antrian offline jaringan.
+**PRD v1.1 vs kode:** **akun bermain orang tua** (`role: parent`, email/Google opsional), **hingga 4 profil** per akun, **tamu** dengan penyekat cookie + **otorisasi** permainan per profil (**[child-access.ts](../apps/api/src/child-access.ts)**), halaman utama = beranda pemain (**[HomeLanding.tsx](../apps/web/src/features/home/HomeLanding.tsx)**) dengan banner daftar/masuk. **Belum diprioritaskan:** merge progres tamu ke akun, antrian offline jaringan.
 
 **Sudah kuat di repo:** inti produk bermain (12 level, 7 tipe aktivitas), seed konten besar (**bank matematika + literasi**), API reward/mastery, dashboard & jalur level, area orang tua (PIN + laporan ringkas), **feedback confetti + suara** pada semua mini-game berbasis pilihan/susun.
 

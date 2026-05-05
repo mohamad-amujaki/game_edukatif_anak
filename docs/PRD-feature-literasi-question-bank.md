@@ -87,7 +87,7 @@ Jika satu JSON aktivitas menjadi terlalu besar untuk kenyamanan maintainer, **di
 
 ## 6. Randomisasi di runtime (disarankan)
 
-- Samakan pola dengan matematika: dari bank ≥ 20, **ambil subset acak** per sesi (mis. **5–8** soal / pasangan) di [`ActivityPlayer`](src/features/ActivityPlayer.tsx) atau lapisan pembungkus payload.
+- Samakan pola dengan matematika: dari bank ≥ 20, **ambil subset acak** per sesi (mis. **5–8** soal / pasangan) di [`ActivityPlayer`](apps/web/src/features/ActivityPlayer.tsx) atau lapisan pembungkus payload.
 - Minimum yang wajib dari PR ini: **bank berisi ≥ 20 variasi**; tidak mewajibkan menampilkan semua dalam satu sesi.
 
 ---

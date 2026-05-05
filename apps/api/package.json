@@ -1,0 +1,14 @@
+{
+  "name": "@mainceria/api",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "pnpm --dir ../.. exec tsx watch apps/api/src/index.ts",
+    "start": "pnpm --dir ../.. exec node --import tsx/esm apps/api/src/index.ts",
+    "check": "pnpm --dir ../.. exec tsc --noEmit -p apps/api/tsconfig.json",
+    "db:generate": "pnpm --dir ../.. exec prisma generate --schema prisma/schema.prisma",
+    "db:migrate": "pnpm --dir ../.. exec prisma migrate dev --schema prisma/schema.prisma",
+    "db:push": "pnpm --dir ../.. exec prisma db push --schema prisma/schema.prisma"
+  }
+}

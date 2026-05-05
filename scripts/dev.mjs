@@ -57,7 +57,13 @@ if (apiPort !== preferredApi) {
 
 const child = spawn(
   'pnpm',
-  ['exec', 'concurrently', '-k', 'pnpm dev:api', 'pnpm dev:vite'],
+  [
+    'exec',
+    'concurrently',
+    '-k',
+    'pnpm --filter @mainceria/api dev',
+    'pnpm --filter @mainceria/web dev:vite',
+  ],
   {
     cwd: root,
     env,

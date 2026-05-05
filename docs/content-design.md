@@ -38,7 +38,7 @@ const huruflGambarMatchingPayload = z.object({
   instruction: z.string(), // teks instruksi (juga ada VO)
   pairs: z.array(z.object({
     huruf: z.string().length(1).regex(/^[A-Z]$/),
-    gambarKey: z.string(),    // key ke /public/img/illustrations/...
+    gambarKey: z.string(),    // nama file di apps/web/public/img/illustrations/ (URL /img/illustrations/…)
     gambarLabel: z.string(),  // contoh: "Apel", untuk VO feedback
   })).min(3).max(5),
   shuffle: z.boolean().default(true),
@@ -356,11 +356,13 @@ Setiap aktivitas membutuhkan minimal:
 
 ### Naming convention file VO
 
+Path di disk monorepo: **`apps/web/public/audio/`** (URL sama seperti di §5.3 [architecture.md](architecture.md): `play('/audio/…')`).
+
 ```
-public/audio/vo/id/activity/{activityId}/{key}.mp3
-public/audio/vo/id/activity/{activityId}/correct-1.mp3
-public/audio/vo/id/activity/{activityId}/wrong-1.mp3
-public/audio/vo/id/feedback/great-1.mp3   (shared)
+apps/web/public/audio/vo/id/activity/{activityId}/{key}.mp3
+apps/web/public/audio/vo/id/activity/{activityId}/correct-1.mp3
+apps/web/public/audio/vo/id/activity/{activityId}/wrong-1.mp3
+apps/web/public/audio/vo/id/feedback/great-1.mp3   (shared)
 ```
 
 ---
@@ -415,7 +417,7 @@ Total: 12 + 6 = **18 aktivitas** untuk MVP.
 
 ## 6. Contoh Seed (TypeScript)
 
-`src/server/db/seed.ts`:
+`prisma/seed.ts` (cuplikan konsep):
 
 ```ts
 import { prisma } from './client';
@@ -534,7 +536,7 @@ await prisma.activityDefinition.upsert({
 
 ### Implementasi `criteriaKey`
 
-`src/server/services/reward-engine.ts` punya map evaluator:
+Evaluasi badge/progres terkait ada di layanan API (mis. alur `submit-activity` dan mastery); contoh pola map evaluator:
 
 ```ts
 const badgeEvaluators: Record<string, (childId: string) => Promise<boolean>> = {

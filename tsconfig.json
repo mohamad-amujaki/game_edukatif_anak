@@ -15,9 +15,20 @@
     "noFallthroughCasesInSwitch": true,
     "baseUrl": ".",
     "paths": {
-      "@/*": ["src/*"],
-      "@server/*": ["server/*"]
+      "@/*": ["apps/web/src/*"],
+      "@mainceria/api-client": ["packages/api-client/src/index.ts"],
+      "@mainceria/types": ["packages/types/src/index.ts"],
+      "@mainceria/utils": ["packages/utils/src/index.ts"],
+      "@mainceria/ui": ["packages/ui/src/index.ts"]
     }
   },
-  "include": ["src", "server", "prisma", "prisma.config.ts"]
+  "include": [
+    "apps/web/src",
+    "apps/api/src",
+    "packages",
+    "prisma",
+    "prisma.config.ts",
+    "scripts",
+    "e2e"
+  ]
 }

@@ -7,7 +7,7 @@
  */
 import { randomUUID } from 'node:crypto';
 import { hashPassword } from 'better-auth/crypto';
-import { prisma } from '../server/db.ts';
+import { prisma } from '../apps/api/src/db';
 
 function arg(name: string): string | undefined {
   const i = process.argv.indexOf(name);
